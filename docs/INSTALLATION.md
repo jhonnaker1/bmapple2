@@ -41,6 +41,12 @@ XRoar, the emulator inside BMCoco, finds them by file name:
 Older versions (`bas10.rom`-`bas12.rom`, `extbas10.rom`, `disk10.rom`)
 work too. Without ROMs BMCoco shows which files it is missing.
 
+All the CoCo ROMs can be downloaded from the
+[Color Computer Archive](https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/),
+already named this way. Copy the files from both its `BASIC_OS` folder
+(Color BASIC, Extended BASIC, CoCo 3) and its `DOS` folder (Disk BASIC)
+into `roms`.
+
 ## First boot
 
 The Pi starts straight into Color BASIC's `OK` prompt (a CoCo 2, or a
