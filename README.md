@@ -31,6 +31,10 @@ Copy your own into the `roms` folder of the SD card: `bas13.rom` and
 `extbas11.rom` for a CoCo 2, `disk11.rom` for disks, `coco3.rom` for a
 CoCo 3. See [docs/ROMS.txt](docs/ROMS.txt).
 
+All the CoCo ROMs can be downloaded from the Color Computer Archive:
+https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/ (already named the way
+XRoar, and so BMCoco, looks for them).
+
 ## Supported hardware
 
 Raspberry Pi 3 Model B, B+ and A+, and the Raspberry Pi Zero 2 W
