@@ -344,6 +344,23 @@ static int seq_ends(const struct matcher *m, const struct seq *s, const char *fr
 
 /* ---- The POSIX interface ---------------------------------------------------- */
 
+/* The compiled pattern is kept at the start of the caller's regex_t, which
+   is bigger than a pointer in every C library (newlib, BSD, glibc), so this
+   doesn't depend on how a library lays regex_t out. */
+typedef char regex_t_holds_a_pointer[sizeof(regex_t) >= sizeof(struct compiled *) ? 1 : -1];
+
+static struct compiled *get_compiled(const regex_t *preg)
+{
+	struct compiled *c;
+	memcpy(&c, preg, sizeof(c));
+	return c;
+}
+
+static void set_compiled(regex_t *preg, struct compiled *c)
+{
+	memcpy(preg, &c, sizeof(c));
+}
+
 int regcomp(regex_t *preg, const char *pattern, int cflags)
 {
 	struct parser ps = {pattern, 0};
@@ -357,14 +374,14 @@ int regcomp(regex_t *preg, const char *pattern, int cflags)
 		return REG_BADPAT;
 	}
 	memset(preg, 0, sizeof(*preg));
-	preg->re_g = (struct re_guts *) c;
+	set_compiled(preg, c);
 	return 0;
 }
 
 int regexec(const regex_t *preg, const char *string, size_t nmatch,
             regmatch_t pmatch[], int eflags)
 {
-	const struct compiled *c = (const struct compiled *) preg->re_g;
+	const struct compiled *c = get_compiled(preg);
 	struct matcher m;
 	size_t start;
 	char *from, *to;
@@ -408,12 +425,12 @@ int regexec(const regex_t *preg, const char *string, size_t nmatch,
 
 void regfree(regex_t *preg)
 {
-	struct compiled *c = (struct compiled *) preg->re_g;
+	struct compiled *c = get_compiled(preg);
 	if (c != NULL) {
 		free_alts(c->alts, c->nalts);
 		free(c);
 	}
-	preg->re_g = NULL;
+	set_compiled(preg, NULL);
 }
 
 /* ---- Files -------------------------------------------------------------------- */
