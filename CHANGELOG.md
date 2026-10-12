@@ -1,3 +1,9 @@
+## 0.1.1 – 2026-10-12
+
+- Web UI in Color Computer colours: the VDG's green text screen, its
+  orange, and its eight colours as a colour bar (it had BMA800XL's Atari
+  colours)
+
 ## 0.1.0 – 2026-10-12
 
 - First version: BMCoco, forked from BMA800XL 1.0.1, with the atari800
