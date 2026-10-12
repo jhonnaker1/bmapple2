@@ -16,7 +16,7 @@ jobs:
   release:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
           fetch-depth: 0
@@ -34,12 +34,12 @@ jobs:
       - name: Install build tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends texinfo wget zip imagemagick python3-pil
+          sudo apt-get install -y --no-install-recommends texinfo wget zip
 
       - name: Cache Arm GNU Toolchain
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
-          path: ~/.cache/bma800xl/toolchains
+          path: ~/.cache/bmcoco/toolchains
           key: arm-gnu-toolchain-15.2.rel1
 
       - name: Test the emulator port on the PC
@@ -52,12 +52,12 @@ jobs:
         run: ./check_release_files.sh --release
 
       - name: Zip the SD card files
-        run: cd build/sdcard && zip -r "../../bma800xl-${{ github.ref_name }}.zip" .
+        run: cd build/sdcard && zip -r "../../bmcoco-${{ github.ref_name }}.zip" .
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
-          name: BMA800XL ${{ github.ref_name }}
-          files: bma800xl-${{ github.ref_name }}.zip
+          name: BMCoco ${{ github.ref_name }}
+          files: bmcoco-${{ github.ref_name }}.zip
           generate_release_notes: false
           draft: true
