@@ -95,9 +95,21 @@ matrix, the joysticks and a frame counter, and makes a sound. With
 `BMCOCO_ROMS` set, Color BASIC and the CoCo 3 are tested too. Screenshots
 (`.ppm`) are written to `tools/hostsim/out/`.
 
-To try the port interactively, build it (`make -C tools/hostsim`) and drive
-`tools/hostsim/build/bmcoco_sim` with a script; see the top of
-`tools/hostsim/host_sim.c` for the commands.
+To play with the port on the PC, run it live:
+
+```
+tools/hostsim/live.sh /path/to/your/roms
+```
+
+and open http://127.0.0.1:8064/ in a browser: the screen, keyboard, sound
+and gamepads (through the browser's Gamepad API) are in the page. The
+simulator's SD card is `tools/hostsim/out/live`; disks, tapes and programs
+copied there can be started from the menu. This runs BMCoco's port and
+XRoar on the PC, not the Pi kernel (no emulator shows the Pi's VideoCore
+display). The web page is served on 127.0.0.1 only.
+
+The simulator can also be driven by a script of key presses and
+screenshots; see the top of `tools/hostsim/host_sim.c` for the commands.
 
 ## The web UI
 

@@ -20,6 +20,10 @@
  *   <frame> run <path>             the web UI starts a file
  *   <frame> quit                   end the test
  *
+ * With BMCOCO_LIVE=PORT it runs in real time instead, with no script: the
+ * screen, keyboard, gamepads and sound are in a web page at
+ * http://127.0.0.1:PORT/ (live.c, live.html). tools/hostsim/live.sh starts it.
+ *
  * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
  * Raspberry Pi. See LICENSE for licensing details.
  */
@@ -27,8 +31,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "../../src/host.h"
+#include "live.h"
 
 /* From src/port/platform.c, called by the web UI on the Pi. */
 void bmcoco_request_power(int power_off);
@@ -122,9 +129,44 @@ static long presents = 0;
 
 static void tick(void);
 
-double host_time(void) { return now; }
-void host_sleep_us(unsigned us) { now += us / 1e6; tick(); }
-void host_yield(void) { now += 1e-7; }
+/* Live mode: the clock is real. */
+static int live;
+
+static double real_time(void)
+{
+	static double start = -1.0;
+	struct timespec ts;
+	double t;
+	clock_gettime(CLOCK_MONOTONIC, &ts);
+	t = ts.tv_sec + ts.tv_nsec / 1e9;
+	if (start < 0)
+		start = t;
+	return t - start;
+}
+
+double host_time(void)
+{
+	if (live)
+		now = real_time();
+	return now;
+}
+
+void host_sleep_us(unsigned us)
+{
+	if (live)
+		usleep(us);
+	else
+		now += us / 1e6;
+	tick();
+}
+
+void host_yield(void)
+{
+	if (live)
+		now = real_time();
+	else
+		now += 1e-7;
+}
 
 /* ---- Sound ---------------------------------------------------------------- */
 
@@ -142,6 +184,8 @@ static void sound_advance(void)
 	double played;
 	if (!snd_open)
 		return;
+	if (live)
+		now = real_time();
 	played = (now - snd_last) * HW_RATE;
 	snd_last = now;
 	if (played > snd_buffered) {
@@ -180,6 +224,8 @@ void host_sound_write(const int16_t *samples, unsigned frames)
 {
 	unsigned i;
 	sound_advance();
+	if (live)
+		live_audio(samples, frames * snd_channels);
 	for (i = 0; i < frames * snd_channels; i++)
 		if (samples[i] != samples[0])
 			snd_nonzero++;
@@ -428,6 +474,11 @@ static void run_script(void)
    keeps going while the emulator sleeps (in its menus, for example). */
 static void tick(void)
 {
+	if (live) {
+		now = real_time();
+		live_poll();
+		return;
+	}
 	long f = (long) (now * refresh + 1e-6);
 	while (frame < f) {
 		frame++;
@@ -441,6 +492,18 @@ static void tick(void)
 void host_video_present(int wait_vsync)
 {
 	presents++;
+	if (live) {
+		if (wait_vsync) {
+			/* Wait for the next refresh of a 60 Hz display. */
+			double period = 1.0 / refresh;
+			double t = real_time();
+			double next = ((long) (t / period) + 1) * period;
+			usleep((useconds_t) ((next - t) * 1e6));
+		}
+		frame++;
+		tick();
+		return;
+	}
 	if (refresh_later > 0 && frame == 30)
 		refresh = refresh_later;
 	if (wait_vsync) {
@@ -535,9 +598,38 @@ int host_set_log_destination(int destination)
 
 extern void bmcoco_main(void);
 
+/* For live.c */
+void sim_push_key(int usage, int pressed)
+{
+	push_key(usage & 0xff, pressed);
+}
+
+void sim_set_pad(int pad, int bits, int x, int y)
+{
+	if (pad < 0 || pad >= HOST_PADS)
+		return;
+	pads[pad] = bits;
+	pad_axes[pad][0] = x;
+	pad_axes[pad][1] = y;
+}
+
+const uint16_t *sim_screen(int *w, int *h, int *pitch)
+{
+	*w = view_w;
+	*h = view_h;
+	*pitch = fb_pitch;
+	return fb ? fb + view_y * fb_pitch + view_x : NULL;
+}
+
 int main(void)
 {
-	const char *r = getenv("BMCOCO_REFRESH");
+	const char *r = getenv("BMCOCO_LIVE");
+	if (r) {
+		live = 1;
+		if (!live_init(atoi(r)))
+			return 1;
+	}
+	r = getenv("BMCOCO_REFRESH");
 	if (r)
 		refresh = atof(r);
 	r = getenv("BMCOCO_REFRESH_LATER");

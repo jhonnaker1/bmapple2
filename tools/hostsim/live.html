@@ -1,0 +1,301 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BMCoco Live</title>
+<style>
+  :root {
+    --bg: #101010;
+    --panel: #1b1b1b;
+    --fg: #e8e8e8;
+    --dim: #9a9a9a;
+    --green: #22e01e;
+    --orange: #ff8200;
+    --border: #333;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 12px 16px;
+  }
+  h1 {
+    font-size: 15px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    margin: 0 0 10px;
+    color: var(--green);
+  }
+  h1 span { color: var(--dim); font-weight: 400; letter-spacing: 0; }
+  #screen-wrap {
+    width: min(100%, 960px, calc((100vh - 170px) * 4 / 3));
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border: 1px solid var(--border);
+    position: relative;
+    outline: none;
+  }
+  #screen-wrap:focus { border-color: var(--green); }
+  canvas {
+    width: 100%;
+    height: 100%;
+    display: block;
+    image-rendering: pixelated;
+  }
+  #click {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    color: var(--fg);
+    font-size: 16px;
+    cursor: pointer;
+  }
+  #bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+    align-items: center;
+    justify-content: center;
+  }
+  button {
+    background: var(--panel);
+    color: var(--fg);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font: inherit;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--green); }
+  button.on { border-color: var(--orange); color: var(--orange); }
+  #status { color: var(--dim); font-size: 12px; margin-top: 8px; text-align: center; }
+  #help { color: var(--dim); font-size: 12px; margin-top: 4px; text-align: center; max-width: 960px; }
+</style>
+</head>
+<body>
+<h1>BMCOCO <span>live in the host simulator</span></h1>
+<div id="screen-wrap" tabindex="0">
+  <canvas id="screen" width="640" height="240"></canvas>
+  <div id="click">Click here to start (keyboard and sound)</div>
+</div>
+<div id="bar">
+  <button data-key="69">Menu (F12)</button>
+  <button data-key="67">Reset (F10)</button>
+  <button data-key="68">Turbo (F11)</button>
+  <button data-key="41">BREAK (Esc)</button>
+  <button data-key="74">CLEAR (Home)</button>
+  <button id="sound">Sound: off</button>
+</div>
+<div id="status">Connecting...</div>
+<div id="help">Type straight into the screen once it has focus. Arrow keys are the CoCo's arrows; a gamepad works as the right joystick (A fire, X Space, Y Enter, Home menu).</div>
+
+<script>
+"use strict";
+
+// KeyboardEvent.code to USB HID usage, which BMCoco takes.
+const USAGE = {
+  Enter: 0x28, Escape: 0x29, Backspace: 0x2a, Tab: 0x2b, Space: 0x2c,
+  Minus: 0x2d, Equal: 0x2e, BracketLeft: 0x2f, BracketRight: 0x30,
+  Backslash: 0x31, Semicolon: 0x33, Quote: 0x34, Backquote: 0x35,
+  Comma: 0x36, Period: 0x37, Slash: 0x38, CapsLock: 0x39,
+  Pause: 0x48, Insert: 0x49, Home: 0x4a, PageUp: 0x4b, Delete: 0x4c,
+  End: 0x4d, PageDown: 0x4e, ArrowRight: 0x4f, ArrowLeft: 0x50,
+  ArrowDown: 0x51, ArrowUp: 0x52, NumpadEnter: 0x58, IntlBackslash: 0x64,
+  ControlLeft: 0xe0, ShiftLeft: 0xe1, AltLeft: 0xe2, MetaLeft: 0xe3,
+  ControlRight: 0xe4, ShiftRight: 0xe5, AltRight: 0xe6, MetaRight: 0xe7,
+};
+for (let i = 0; i < 26; i++) USAGE["Key" + String.fromCharCode(65 + i)] = 0x04 + i;
+for (let i = 1; i <= 9; i++) USAGE["Digit" + i] = 0x1e + i - 1;
+USAGE.Digit0 = 0x27;
+for (let i = 1; i <= 12; i++) USAGE["F" + i] = 0x3a + i - 1;
+
+const wrap = document.getElementById("screen-wrap");
+const canvas = document.getElementById("screen");
+const ctx = canvas.getContext("2d");
+const statusEl = document.getElementById("status");
+let image = null;
+let frames = 0;
+let lastFps = performance.now();
+
+function send(path) {
+  fetch(path, { cache: "no-store" }).catch(() => {});
+}
+
+// ---- Keyboard ----
+const held = new Set();
+function key(usage, pressed) {
+  send(`/key?u=${usage}&p=${pressed ? 1 : 0}`);
+}
+wrap.addEventListener("keydown", (e) => {
+  const u = USAGE[e.code];
+  if (u === undefined) return;
+  e.preventDefault();
+  if (e.repeat || held.has(u)) return;
+  held.add(u);
+  key(u, true);
+});
+wrap.addEventListener("keyup", (e) => {
+  const u = USAGE[e.code];
+  if (u === undefined) return;
+  e.preventDefault();
+  held.delete(u);
+  key(u, false);
+});
+wrap.addEventListener("blur", () => {
+  for (const u of held) key(u, false);
+  held.clear();
+});
+
+document.querySelectorAll("button[data-key]").forEach((b) => {
+  b.addEventListener("click", () => {
+    const u = Number(b.dataset.key);
+    key(u, true);
+    setTimeout(() => key(u, false), 120);
+    wrap.focus();
+  });
+});
+
+// ---- Sound ----
+let audioCtx = null;
+let nextTime = 0;
+let soundOn = false;
+const soundBtn = document.getElementById("sound");
+function setSound(on) {
+  soundOn = on;
+  if (on && !audioCtx) audioCtx = new AudioContext({ sampleRate: 44100 });
+  if (audioCtx) on ? audioCtx.resume() : audioCtx.suspend();
+  soundBtn.textContent = "Sound: " + (on ? "on" : "off");
+  soundBtn.classList.toggle("on", on);
+}
+soundBtn.addEventListener("click", () => { setSound(!soundOn); wrap.focus(); });
+
+async function audioLoop() {
+  for (;;) {
+    try {
+      const r = await fetch("/audio", { cache: "no-store" });
+      const buf = await r.arrayBuffer();
+      if (soundOn && audioCtx && buf.byteLength >= 2) {
+        const samples = new Int16Array(buf);
+        const ab = audioCtx.createBuffer(1, samples.length, 44100);
+        const out = ab.getChannelData(0);
+        for (let i = 0; i < samples.length; i++) out[i] = samples[i] / 32768;
+        const src = audioCtx.createBufferSource();
+        src.buffer = ab;
+        src.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        // Keep about 80 ms queued; start again if we fell behind.
+        if (nextTime < now + 0.02 || nextTime > now + 0.4) nextTime = now + 0.08;
+        src.start(nextTime);
+        nextTime += ab.duration;
+      }
+    } catch (e) { /* the simulator restarted: try again */ }
+    await new Promise((res) => setTimeout(res, 30));
+  }
+}
+
+// ---- Gamepads (Gamepad API, standard mapping) ----
+const PAD = { A: 0x1, B: 0x2, X: 0x4, Y: 0x8, L: 0x10, R: 0x20, SELECT: 0x40,
+              START: 0x80, HOME: 0x100, UP: 0x1000, DOWN: 0x2000, LEFT: 0x4000, RIGHT: 0x8000 };
+const lastPad = [];
+function pollPads() {
+  const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+  for (let n = 0; n < 4; n++) {
+    const p = pads[n];
+    let msg;
+    if (!p) {
+      msg = `n=${n}&b=-1&x=-1&y=-1`;
+    } else {
+      const btn = (i) => p.buttons[i] && p.buttons[i].pressed;
+      let b = 0;
+      if (btn(0)) b |= PAD.A;
+      if (btn(1)) b |= PAD.B;
+      if (btn(2)) b |= PAD.X;
+      if (btn(3)) b |= PAD.Y;
+      if (btn(4) || btn(6)) b |= PAD.L;
+      if (btn(5) || btn(7)) b |= PAD.R;
+      if (btn(8)) b |= PAD.SELECT;
+      if (btn(9)) b |= PAD.START;
+      if (btn(16)) b |= PAD.HOME;
+      if (btn(12)) b |= PAD.UP;
+      if (btn(13)) b |= PAD.DOWN;
+      if (btn(14)) b |= PAD.LEFT;
+      if (btn(15)) b |= PAD.RIGHT;
+      const ax = p.axes[0] || 0, ay = p.axes[1] || 0;
+      // The kernel also reports a pushed stick as D-pad presses.
+      if (ax < -0.5) b |= PAD.LEFT;
+      if (ax > 0.5) b |= PAD.RIGHT;
+      if (ay < -0.5) b |= PAD.UP;
+      if (ay > 0.5) b |= PAD.DOWN;
+      const x = Math.round((ax + 1) * 32767.5), y = Math.round((ay + 1) * 32767.5);
+      msg = `n=${n}&b=${b}&x=${x}&y=${y}`;
+    }
+    if (lastPad[n] !== msg) {
+      lastPad[n] = msg;
+      send("/pad?" + msg);
+    }
+  }
+}
+
+// ---- Screen ----
+async function frameLoop() {
+  for (;;) {
+    try {
+      const r = await fetch("/frame", { cache: "no-store" });
+      const buf = await r.arrayBuffer();
+      if (buf.byteLength > 4) {
+        const v = new DataView(buf);
+        const w = v.getUint16(0, true), h = v.getUint16(2, true);
+        if (canvas.width !== w || canvas.height !== h || !image) {
+          canvas.width = w;
+          canvas.height = h;
+          image = ctx.createImageData(w, h);
+        }
+        const px = new Uint16Array(buf, 4, w * h);
+        const d = image.data;
+        for (let i = 0, j = 0; i < px.length; i++, j += 4) {
+          const c = px[i];
+          d[j] = ((c >> 11) & 0x1f) * 255 / 31;
+          d[j + 1] = ((c >> 5) & 0x3f) * 255 / 63;
+          d[j + 2] = (c & 0x1f) * 255 / 31;
+          d[j + 3] = 255;
+        }
+        ctx.putImageData(image, 0, 0);
+        frames++;
+      }
+      const now = performance.now();
+      if (now - lastFps > 1000) {
+        statusEl.textContent = `Connected · ${canvas.width}x${canvas.height} · ${Math.round(frames * 1000 / (now - lastFps))} fps shown`;
+        frames = 0;
+        lastFps = now;
+      }
+    } catch (e) {
+      statusEl.textContent = "Waiting for the simulator...";
+      await new Promise((res) => setTimeout(res, 500));
+    }
+    pollPads();
+    await new Promise((res) => requestAnimationFrame(res));
+  }
+}
+
+document.getElementById("click").addEventListener("click", (e) => {
+  e.currentTarget.remove();
+  setSound(true);
+  wrap.focus();
+});
+
+frameLoop();
+audioLoop();
+</script>
+</body>
+</html>

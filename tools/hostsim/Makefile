@@ -24,7 +24,7 @@ OBJS := $(addprefix $(OUT)/portalib/,$(XROAR_PORTALIB_SRCS:.c=.o)) \
         $(addprefix $(OUT)/xroar/,$(XROAR_SRCS:.c=.o)) \
         $(OUT)/port/platform.o $(OUT)/port/joystick.o $(OUT)/port/menu.o \
         $(OUT)/port/osd.o $(OUT)/port/becker_stub.o $(OUT)/port/posix_extra.o \
-        $(OUT)/host_sim.o
+        $(OUT)/host_sim.o $(OUT)/live.o
 
 all: $(OUT)/bmcoco_sim
 
@@ -44,9 +44,13 @@ $(OUT)/port/%.o: $(ROOT)/src/port/%.c $(ROOT)/src/port/config.h $(ROOT)/src/port
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Wall -Wextra -Wno-unused-parameter -c -o $@ $<
 
-$(OUT)/host_sim.o: host_sim.c $(ROOT)/src/host.h
+$(OUT)/host_sim.o: host_sim.c live.h $(ROOT)/src/host.h
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -Wall -c -o $@ $<
+
+$(OUT)/live.o: live.c live.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Wall -Wextra -DLIVE_HTML=\"$(abspath live.html)\" -c -o $@ $<
 
 clean:
 	rm -rf $(OUT)
