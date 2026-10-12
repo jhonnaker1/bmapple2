@@ -1,15 +1,15 @@
 #!/bin/bash
 #
 # Builds the third party libraries (circle-stdlib: Circle and newlib, and the
-# Circle addons) and then the BMA800XL kernel for one board:
+# Circle addons) and then the BMCoco kernel for one board:
 #
 #   ./make_all.sh [pi2|pi3] [--skip-patches]
 #
 #   pi3 (default)  kernel8-32.img: Pi 3 and Pi Zero 2 W
 #   pi2            kernel7.img: Pi 2
 #
-# --skip-patches leaves Circle and atari800 as they are instead of resetting
-# them and applying src/patches/ again.
+# --skip-patches leaves Circle as it is instead of resetting it and applying
+# src/patches/ again.
 # Run clean_all.sh first for a completely fresh build, and before building
 # for a different board: the libraries are built for one board at a time.
 #
@@ -40,15 +40,39 @@ esac
 
 if [ ! -f "$SRC_DIR/sdcard/config.txt" ]
 then
-    echo "Must be run from the BMA800XL root directory." >&2
+    echo "Must be run from the BMCoco root directory." >&2
     exit 1
 fi
 
-for tool in make patch makeinfo
+# newlib only uses makeinfo for its manuals, which BMCoco doesn't need.
+# Without it, a stand-in writes empty ones.
+if ! command -v makeinfo >/dev/null 2>&1
+then
+    STUB_DIR="$SRC_DIR/build/makeinfo-stub"
+    mkdir -p "$STUB_DIR"
+    cat > "$STUB_DIR/makeinfo" <<'STUB'
+#!/bin/sh
+# Stand-in for makeinfo (see make_all.sh): writes an empty manual.
+while [ $# -gt 0 ]
+do
+    case "$1" in
+        -o) shift; : > "$1" ;;
+        --version) echo "makeinfo (GNU texinfo) 7.0"; exit 0 ;;
+    esac
+    shift
+done
+exit 0
+STUB
+    chmod +x "$STUB_DIR/makeinfo"
+    export PATH="$STUB_DIR:$PATH"
+fi
+
+for tool in make patch
 do
     if ! command -v $tool >/dev/null 2>&1
     then
         echo "Missing $tool. On Debian/Ubuntu: sudo apt-get install build-essential texinfo" >&2
+        echo "On macOS: xcode-select --install; brew install texinfo" >&2
         exit 1
     fi
 done
@@ -63,10 +87,29 @@ fi
 
 source "$SRC_DIR/get_gnu_toolchain.sh"
 
-if [ ! -f "$CIRCLE_HOME/Rules.mk" ] || [ ! -f "$SRC_DIR/third_party/atari800/src/atari.c" ]
+# On macOS, circle-stdlib's configure needs a newer bash and GNU getopt
+# than the system's: brew install bash gnu-getopt
+if [ "$(uname -s)" = "Darwin" ]
+then
+    BREW_PREFIX=$(brew --prefix 2>/dev/null || echo /opt/homebrew)
+    if [ ! -x "$BREW_PREFIX/bin/bash" ] || [ ! -x "$BREW_PREFIX/opt/gnu-getopt/bin/getopt" ]
+    then
+        echo "On macOS the build needs: brew install bash gnu-getopt" >&2
+        exit 1
+    fi
+    export PATH="$BREW_PREFIX/opt/gnu-getopt/bin:$BREW_PREFIX/bin:$PATH"
+fi
+
+# nproc is GNU; macOS has sysctl.
+if ! command -v nproc >/dev/null 2>&1
+then
+    nproc() { sysctl -n hw.ncpu; }
+fi
+
+if [ ! -f "$CIRCLE_HOME/Rules.mk" ] || [ ! -f "$SRC_DIR/third_party/xroar/src/xroar.c" ]
 then
     echo "Fetching submodules..."
-    git -C "$SRC_DIR" submodule update --init third_party/atari800 third_party/circle-stdlib
+    git -C "$SRC_DIR" submodule update --init third_party/xroar third_party/circle-stdlib
     git -C "$CIRCLE_STDLIB" submodule update --init libs/circle libs/circle-newlib
     git -C "$CIRCLE_HOME" submodule update --init addon/wlan/hostap
 fi
@@ -86,7 +129,6 @@ else
         echo "  $(basename "$p")"
         patch -s -p1 < "$p"
     done
-    "$SRC_DIR/tools/apply_atari800_patches.sh"
 fi
 
 echo "=============================================================="
@@ -94,7 +136,7 @@ echo "BUILD CIRCLE-STDLIB for Raspberry Pi $RASPI"
 echo "=============================================================="
 cd "$CIRCLE_STDLIB"
 find . -name config.cache -delete
-./configure --raspberrypi=$RASPI --kernel-max-size 16
+bash ./configure --raspberrypi=$RASPI --kernel-max-size 16
 make -C libs/circle clean >/dev/null 2>&1 || true
 make -j"$(nproc)"
 

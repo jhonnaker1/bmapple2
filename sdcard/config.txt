@@ -1,10 +1,10 @@
 #
-# BMA800XL - bare metal Atari 800XL emulator for the Raspberry Pi 2 and 3
+# BMCoco - bare metal Tandy Color Computer emulator for the Raspberry Pi 2 and 3
 #
 # Raspberry Pi firmware settings. Emulator options are in cmdline.txt.
 #
 
-# BMA800XL runs in 32 bit mode, with a kernel for each board.
+# BMCoco runs in 32 bit mode, with a kernel for each board.
 arm_64bit=0
 [pi2]
 kernel=kernel7.img
@@ -14,13 +14,13 @@ kernel=kernel8-32.img
 kernel=kernel8-32.img
 [all]
 
-# Video: 1280x720 at 50 Hz, the right rate for a PAL Atari (the default).
-# For an NTSC Atari use 60 Hz instead: hdmi_mode=4
+# Video: 1280x720 at 60 Hz, the right rate for an NTSC CoCo (the default).
+# For a PAL CoCo or a Dragon use 50 Hz instead: hdmi_mode=19
 # The emulator's frames are locked to the display when its refresh rate
-# matches the Atari's, which gives perfectly smooth scrolling.
+# matches the CoCo's, which gives perfectly smooth scrolling.
 disable_overscan=1
 hdmi_group=1
-hdmi_mode=19
+hdmi_mode=4
 
 # Other useful modes (hdmi_group=1):
 #   hdmi_mode=19  720p  50 Hz        hdmi_mode=4   720p  60 Hz
@@ -36,9 +36,9 @@ hdmi_mode=19
 # Uncomment to boost the HDMI signal if you get interference
 #config_hdmi_boost=4
 
-# Composite video (the 3.5mm jack) instead of HDMI: sdtv_mode=2 is PAL,
-# sdtv_mode=0 is NTSC. Unplug HDMI to use it.
-sdtv_mode=2
+# Composite video (the 3.5mm jack) instead of HDMI: sdtv_mode=0 is NTSC,
+# sdtv_mode=2 is PAL. Unplug HDMI to use it.
+sdtv_mode=0
 
 # Scaling filter: 8 = sharp pixels, 2 = soft, 6 = softer (default)
 #scaling_kernel=8

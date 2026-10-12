@@ -6,30 +6,43 @@
 #
 
 ROOT := ../..
-A8_DIR := $(ROOT)/third_party/atari800/src
-include $(ROOT)/src/port/atari800.mk
+XROAR := $(ROOT)/third_party/xroar
+include $(ROOT)/src/port/xroar.mk
 
-A8_VERSION := $(shell grep -m1 '^AC_INIT' $(ROOT)/third_party/atari800/configure.ac | cut -d, -f2 | tr -d ' []')
+XROAR_VERSION := $(shell $(ROOT)/tools/xroar_version.sh)
 
 CC ?= cc
-CFLAGS = -O2 -g -I $(ROOT)/src/port -I $(A8_DIR) -DA8_VERSION=\"$(A8_VERSION)\" -w
+# The simulator runs in a directory standing in for the SD card.
+CFLAGS = -O2 -g -std=gnu11 -DHAVE_CONFIG_H -I $(ROOT)/src/port -I $(XROAR) -I $(XROAR)/src \
+         -I $(XROAR)/portalib -DXROAR_VERSION=\"$(XROAR_VERSION)\" \
+         -DROMPATH=\"roms:.\" -DCONFPATH=\".\" \
+         -DBMCOCO_HOST_LIBC -Dregcomp=bmcoco_regcomp -Dregexec=bmcoco_regexec \
+         -Dregfree=bmcoco_regfree
 
 OUT := build
-OBJS := $(addprefix $(OUT)/a8/,$(A8_SRCS:.c=.o)) \
-        $(OUT)/port/platform.o $(OUT)/port/keyboard.o $(OUT)/port/menu.o $(OUT)/host_sim.o
+OBJS := $(addprefix $(OUT)/portalib/,$(XROAR_PORTALIB_SRCS:.c=.o)) \
+        $(addprefix $(OUT)/xroar/,$(XROAR_SRCS:.c=.o)) \
+        $(OUT)/port/platform.o $(OUT)/port/joystick.o $(OUT)/port/menu.o \
+        $(OUT)/port/osd.o $(OUT)/port/becker_stub.o $(OUT)/port/posix_extra.o \
+        $(OUT)/host_sim.o
 
-all: $(OUT)/bma800xl_sim
+all: $(OUT)/bmcoco_sim
 
-$(OUT)/bma800xl_sim: $(OBJS)
+$(OUT)/bmcoco_sim: $(OBJS)
 	$(CC) -o $@ $(OBJS) -lm
 
-$(OUT)/a8/%.o: $(A8_DIR)/%.c $(ROOT)/src/port/config.h
+$(OUT)/portalib/%.o: $(XROAR)/portalib/%.c $(ROOT)/src/port/config.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -c -o $@ $<
+	@$(CC) $(CFLAGS) -w -c -o $@ $<
 
-$(OUT)/port/%.o: $(ROOT)/src/port/%.c $(ROOT)/src/port/config.h $(ROOT)/src/host.h
+$(OUT)/xroar/%.o: $(XROAR)/src/%.c $(ROOT)/src/port/config.h
 	@mkdir -p $(dir $@)
-	$(CC) $(CFLAGS) -Wall -c -o $@ $<
+	@$(CC) $(CFLAGS) -w -c -o $@ $<
+
+$(OUT)/port/%.o: $(ROOT)/src/port/%.c $(ROOT)/src/port/config.h $(ROOT)/src/port/bmcoco.h \
+                 $(ROOT)/src/port/osd.h $(ROOT)/src/host.h
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -Wall -Wextra -Wno-unused-parameter -c -o $@ $<
 
 $(OUT)/host_sim.o: host_sim.c $(ROOT)/src/host.h
 	@mkdir -p $(dir $@)

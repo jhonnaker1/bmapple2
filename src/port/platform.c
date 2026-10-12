@@ -1,22 +1,29 @@
 /*
- * platform.c - atari800 platform layer for BMA800XL.
+ * platform.c - XRoar platform layer for BMCoco.
  *
- * Implements the PLATFORM_* interface (see atari800's platform.h) on top of
- * the Circle kernel services in src/host.h, and runs the emulator's main
- * loop. Keyboard and joystick input are in keyboard.c.
+ * XRoar is built from modules: a user interface module supplies the video
+ * output, and can supply sound output, joysticks and file requesters. This
+ * file is BMCoco's user interface module ("bmcoco"), with its video and
+ * sound modules, on top of the Circle kernel services in src/host.h. It also
+ * runs the emulator's main loop. Joysticks are in joystick.c, the menu in
+ * menu.c and osd.c.
+ *
+ * Keyboard: XRoar's own host keyboard code takes USB HID usage codes, which
+ * is what the kernel reports, so keys are passed straight to it; XRoar maps
+ * them to the CoCo's matrix (or, with "typed characters" on, translates the
+ * characters typed using the layout set by keyboard= in cmdline.txt).
  *
  * Timing: when the display refreshes at (close to) the emulated machine's
- * frame rate, every emulated frame is shown on its own display refresh and
- * the emulator waits for vertical blank instead of a timer. Scrolling is
- * then perfectly smooth. The sound is generated at a rate scaled by the
- * small difference between the two frame rates so the audio buffer neither
- * fills up nor runs dry. Otherwise atari800's own timer based pacing is used.
+ * frame rate, every frame is shown on its own display refresh and the
+ * emulator waits for vertical blank: scrolling is then perfectly smooth.
+ * Otherwise the emulation is paced by a timer. Either way the sound is kept
+ * in step by dropping or repeating a sample now and then.
  *
- * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
- * Raspberry Pi. See LICENSE for licensing details.
+ * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * the Raspberry Pi. See LICENSE for licensing details.
  */
 
-#include "config.h"
+#include "top-config.h"
 
 #include <math.h>
 #include <stdio.h>
@@ -24,439 +31,599 @@
 #include <string.h>
 #include <unistd.h>
 
-#include "afile.h"
-#include "akey.h"
-#include "atari.h"
-#include "colours.h"
-#include "cpu.h"
-#include "input.h"
-#include "log.h"
-#include "memory.h"
-#include "monitor.h"
-#include "platform.h"
-#include "screen.h"
-#include "sio.h"
+#include "sds.h"
+#include "xalloc.h"
+
+#include "ao.h"
+#include "events.h"
+#include "hkbd.h"
+#include "joystick.h"
+#include "logging.h"
+#include "machine.h"
+#include "module.h"
+#include "part.h"
+#include "romlist.h"
 #include "sound.h"
 #include "ui.h"
-#include "ui_basic.h"
-#include "util.h"
+#include "vdisk.h"
+#include "vdrive.h"
+#include "vo.h"
+#include "vo_render.h"
+#include "xroar.h"
 
 #include "../host.h"
-#include "bma800xl.h"
+#include "bmcoco.h"
+#include "osd.h"
 
-/* On-screen message (see below). */
-static int message_frames;
-static void draw_message(void);
+/* ---- Settings ---------------------------------------------------------------- */
 
-/* ---- Display --------------------------------------------------------------- */
+const char *bmcoco_sd_root(void)
+{
+	return host_option("root", "/");
+}
 
-/* How much of the Atari's 384x240 screen is shown. */
-enum {
-	VIEW_PLAYFIELD = 0,   /* 320x192, no border */
-	VIEW_NORMAL = 1,      /* 336x240, atari800's default */
-	VIEW_FULL = 2         /* 384x240, everything */
-};
+static int option_on(const char *name, int default_value)
+{
+	const char *value = host_option(name, NULL);
+	if (value == NULL || *value == '\0')
+		return default_value;
+	return strcmp(value, "1") == 0 || strcmp(value, "on") == 0
+	    || strcmp(value, "yes") == 0 || strcmp(value, "true") == 0;
+}
 
-static int view_mode = VIEW_NORMAL;
-static uint8_t *fb_pixels = NULL;
-static int fb_pitch = 0;
-static int draw_direct = FALSE;     /* atari800 draws straight into fb_pixels */
+/* ---- Video ------------------------------------------------------------------- */
 
-static double refresh_rate = 0.0;   /* measured display refresh, Hz */
-static int vsync_lock = FALSE;      /* pace emulation by the display */
-static int vsync_tv_mode = -1;      /* TV mode vsync_lock was decided for */
+/* The frame buffer is big enough for XRoar's largest picture ("underscan"). */
+#define FB_W 736
+#define FB_H 288
+
+static uint16_t *fb_pixels;
+static int fb_pitch_px;
+
+static struct vo_interface *bm_vo;
+static int vp_w = 640, vp_h = 240;  /* XRoar's viewport */
+static int vp_60hz;                  /* XRoar's 60 Hz scaling is on */
+static int osd_view;                 /* the menu is showing */
+
+static double refresh_rate = 60.0;   /* measured display refresh, Hz */
+static double machine_rate = 0.0;    /* emulated frame rate, Hz */
+static int vsync_lock;
+static int turbo;
+
+/* Frame rate tracking: emulated time between vertical syncs. */
+static event_ticks last_vsync_tick;
+static int have_vsync_tick;
+
+uint16_t *bmcoco_framebuffer(int *pitch_px)
+{
+	*pitch_px = fb_pitch_px;
+	return fb_pixels;
+}
+
+static int shown_height(void)
+{
+	return vp_60hz ? (vp_h * 5) / 6 : vp_h;
+}
 
 static void apply_view(void)
 {
-	int x, y, w, h;
-	/* Pixel aspect ratio: atari800's 336x240 view fills a 4:3 screen. */
-	double par = (4.0 / 3.0) / (336.0 / 240.0);
-	double aspect;
-
-	switch (view_mode) {
-	case VIEW_PLAYFIELD:
-		x = 32; y = 24; w = 320; h = 192;
-		break;
-	case VIEW_FULL:
-		x = 0; y = 0; w = Screen_WIDTH; h = Screen_HEIGHT;
-		break;
-	case VIEW_NORMAL:
-	default:
-		x = 24; y = 0; w = 336; h = Screen_HEIGHT;
-		break;
-	}
-	aspect = w * par / h * host_option_double("aspect", 1.0);
-	host_video_set_view(x, y, w, h, aspect);
-}
-
-/* border=normal|none|full */
-static void read_border_setting(void)
-{
-	const char *border = host_option("border", "normal");
-	if (strcmp(border, "none") == 0)
-		view_mode = VIEW_PLAYFIELD;
-	else if (strcmp(border, "full") == 0)
-		view_mode = VIEW_FULL;
+	double aspect = (4.0 / 3.0) * host_option_double("aspect", 1.0);
+	if (osd_view)
+		host_video_set_view(0, 0, 640, 240, 4.0 / 3.0);
 	else
-		view_mode = VIEW_NORMAL;
+		host_video_set_view(0, 0, vp_w, shown_height(), aspect);
 }
 
-static double atari_fps(void)
+void bmcoco_osd_view(int on)
 {
-	return Atari800_tv_mode == Atari800_TV_PAL ? Atari800_FPS_PAL : Atari800_FPS_NTSC;
+	osd_view = on;
+	apply_view();
 }
 
-/* atari800's crash menu ("The Atari computer has crashed") is only on the
-   screen. The CPU opens it through UI_Run, which calls the UI driver's fInit
-   first: that is where the crash is written to the log, with the registers,
-   the code around it and the disks in use. */
-static UI_tDriver crash_logging_driver;
-
-static void crash_logging_init(void)
+static void clear_framebuffer(void)
 {
-	if (UI_crash_code >= 0) {
-		char msg[96];
-		int len, i;
-		snprintf(msg, sizeof(msg), "Atari crashed: code $%02X (CIM) at $%04X",
-		         UI_crash_code, UI_crash_address);
-		host_log(msg);
-		snprintf(msg, sizeof(msg), "  A=%02X X=%02X Y=%02X S=%02X P=%02X",
-		         CPU_regA, CPU_regX, CPU_regY, CPU_regS, CPU_regP);
-		host_log(msg);
-		len = snprintf(msg, sizeof(msg), "  $%04X:", (UWORD) (UI_crash_address - 8));
-		for (i = -8; i < 8; i++)
-			len += snprintf(msg + len, sizeof(msg) - len, " %02X",
-			                MEMORY_SafeGetByte((UWORD) (UI_crash_address + i)));
-		host_log(msg);
-		for (i = 0; i < SIO_MAX_DRIVES; i++) {
-			if (SIO_drive_status[i] == SIO_OFF || SIO_drive_status[i] == SIO_NO_DISK)
-				continue;
-			snprintf(msg, sizeof(msg), "  D%d: %.80s", i + 1, SIO_filename[i]);
-			host_log(msg);
-		}
-	}
-	UI_BASIC_driver.fInit();
+	int y;
+	for (y = 0; y < FB_H; y++)
+		memset(fb_pixels + y * fb_pitch_px, 0, FB_W * 2);
 }
 
 /* Times a few vertical blanks to find the display's refresh rate. */
 static void measure_refresh_rate(void)
 {
-	enum { SKIP = 3, COUNT = 12 };
-	double start = 0.0;
+	enum { SKIP = 3, COUNT = 20 };
+	double start = 0.0, rate;
 	int i;
 	for (i = 0; i < SKIP + COUNT; i++) {
 		host_video_present(TRUE);
 		if (i == SKIP - 1)
 			start = host_time();
 	}
-	refresh_rate = COUNT / (host_time() - start);
-	{
-		char msg[64];
-		snprintf(msg, sizeof(msg), "Display refresh rate: %.3f Hz", refresh_rate);
-		host_log(msg);
-	}
+	rate = COUNT / (host_time() - start);
+	if (rate > 20.0 && rate < 250.0)
+		refresh_rate = rate;
+	LOG_PRINT("BMCoco: display refresh rate %.3f Hz\n", refresh_rate);
 }
 
-/* The refresh rate measured at start up is only roughly right. While the
-   emulation runs in step with the display, keep timing vertical blanks over
-   a long window; the sound rate is then corrected with the better figure. */
-static double vbl_window_start = 0.0;
-static double vbl_last = 0.0;
-static long vbl_count = 0;
-static int refresh_refined = FALSE;
-
-static void track_refresh_rate(void)
-{
-	double t = host_time();
-	double period = 1.0 / refresh_rate;
-
-	if (vbl_count == 0 || t - vbl_last > 1.5 * period || t - vbl_last < 0.5 * period) {
-		/* A missed or doubled vertical blank: start a new window. */
-		vbl_window_start = t;
-		vbl_count = 0;
-	}
-	vbl_last = t;
-	vbl_count++;
-}
-
-/* Returns TRUE when a better refresh rate is known and the sound rate should
-   be recalculated. */
-static int refine_refresh_rate(void)
-{
-	double measured;
-	if (vbl_count < 200)
-		return FALSE;
-	measured = (vbl_count - 1) / (vbl_last - vbl_window_start);
-	/* First refinement after about four seconds; later ones only when the
-	   sound is paused anyway (in the menus) and the figure has moved. */
-	if (refresh_refined && !(UI_is_active && fabs(measured / refresh_rate - 1.0) > 2e-5))
-		return FALSE;
-	if (refresh_refined && vbl_count < 1000)
-		return FALSE;
-	Log_print("BMA800XL: display refresh rate %.4f Hz", measured);
-	refresh_rate = measured;
-	refresh_refined = TRUE;
-	return TRUE;
-}
+/* The first decision is logged, and every change after it. */
+static int sync_decided;
 
 static void update_sync_mode(void)
 {
 	const char *mode = host_option("vsync", "auto");
-	double ratio = refresh_rate / atari_fps();
-
+	int lock;
 	if (strcmp(mode, "off") == 0 || strcmp(mode, "0") == 0)
-		vsync_lock = FALSE;
+		lock = FALSE;
 	else if (strcmp(mode, "on") == 0 || strcmp(mode, "1") == 0)
-		vsync_lock = TRUE;
-	else
-		/* A 50 Hz display for PAL or 60 Hz for NTSC; anything else would
-		   run the machine noticeably too fast or slow. */
-		vsync_lock = ratio > 0.98 && ratio < 1.02;
-	vsync_tv_mode = Atari800_tv_mode;
-
-	Log_print("%s: display %.2f Hz, Atari %.2f Hz, %s",
-	          "BMA800XL", refresh_rate, atari_fps(),
-	          vsync_lock ? "synchronised to display" : "timer paced");
+		lock = TRUE;
+	else {
+		/* A 60 Hz display for an NTSC CoCo, 50 Hz for a PAL one;
+		   anything else would run it noticeably fast or slow. */
+		double ratio = machine_rate > 0.0 ? refresh_rate / machine_rate : 0.0;
+		lock = ratio > 0.98 && ratio < 1.02;
+	}
+	if (lock != vsync_lock || !sync_decided) {
+		sync_decided = TRUE;
+		LOG_PRINT("BMCoco: display %.2f Hz, machine %.2f Hz, %s\n", refresh_rate,
+		          machine_rate, lock ? "synchronised to the display" : "timer paced");
+	}
+	vsync_lock = lock;
 }
 
-void PLATFORM_PaletteUpdate(void)
+/* Called at the emulated machine's vertical sync. */
+static void track_machine_rate(void)
 {
-	int i;
-	for (i = 0; i < 256; i++)
-		host_video_set_palette(i, (uint32_t) Colours_table[i] & 0xffffff);
-	host_video_update_palette();
+	event_ticks now = event_current_tick;
+	if (have_vsync_tick) {
+		event_ticks delta = now - last_vsync_tick;
+		if (delta > 0) {
+			double rate = (double) EVENT_TICK_RATE / (double) delta;
+			/* Ignore odd frames (the VDG resyncing, mode changes). */
+			if (rate > 45.0 && rate < 65.0) {
+				int was_ntsc = machine_rate > 55.0;
+				if (machine_rate == 0.0 || (rate > 55.0) != was_ntsc)
+					machine_rate = rate;
+				else
+					machine_rate += (rate - machine_rate) * 0.01;
+				if (machine_rate == rate)
+					update_sync_mode();
+			}
+		}
+	}
+	last_vsync_tick = now;
+	have_vsync_tick = TRUE;
 }
 
-/* ---- Sound ------------------------------------------------------------------ */
+static double last_present;
 
-static int sound_paused = TRUE;
-static int sound_channels = 1;
-static unsigned sound_hw_rate = 0;
-static const int16_t silence[2048 * 2];
-
-static void feed_silence(void);
-
-int PLATFORM_SoundSetup(Sound_setup_t *setup)
+static void bm_draw(void *sptr)
 {
-	unsigned buffer_ms = setup->buffer_ms ? setup->buffer_ms
-	                     : (unsigned) host_option_int("audio_buffer_ms", 40);
-	unsigned frames;
-
-	if (buffer_ms < 10)
-		buffer_ms = 10;
-	if (setup->channels < 1)
-		setup->channels = 1;
-	if (setup->channels > 2)
-		setup->channels = 2;
-	setup->sample_size = 2;
-
-	frames = 44100 * buffer_ms / 1000;
-	sound_hw_rate = host_sound_open(44100, setup->channels, frames);
-	if (sound_hw_rate == 0)
-		return FALSE;
-	sound_channels = setup->channels;
-
-	/* When the frame rate follows the display, generate audio at the rate
-	   that keeps up with the display (see the top of this file). */
-	setup->freq = sound_hw_rate;
-	if (vsync_lock)
-		setup->freq = (unsigned) (sound_hw_rate * atari_fps() / refresh_rate + 0.5);
-	setup->buffer_frames = setup->freq * buffer_ms / 1000;
-	sound_paused = TRUE;
-	return TRUE;
+	double now;
+	(void) sptr;
+	if (osd_view)
+		return;
+	track_machine_rate();
+	osd_draw_notification(fb_pixels, fb_pitch_px, vp_w, shown_height());
+	now = host_time();
+	if (turbo) {
+		/* Show a frame now and then; the rest of the time emulate. */
+		if (now - last_present < 0.04) {
+			host_yield();
+			return;
+		}
+		host_video_present(FALSE);
+	} else {
+		host_video_present(vsync_lock);
+	}
+	last_present = now;
 }
 
-void PLATFORM_SoundExit(void)
+static void bm_set_viewport(void *sptr, int w, int h)
 {
-	host_sound_close();
+	(void) sptr;
+	if (w < 64)
+		w = 64;
+	if (w > FB_W)
+		w = FB_W;
+	if (h < 48)
+		h = 48;
+	if (h > FB_H)
+		h = FB_H;
+	vp_w = w;
+	vp_h = h;
+	vo_render_set_viewport(bm_vo->renderer, vp_w, shown_height());
+	bm_vo->renderer->buffer_pitch = fb_pitch_px;
+	clear_framebuffer();
+	apply_view();
 }
 
-void PLATFORM_SoundPause(void)
+static void bm_notify_frame_rate(void *sptr, bool is_60hz)
 {
-	sound_paused = TRUE;
-	feed_silence();
+	(void) sptr;
+	vp_60hz = is_60hz;
+	bm_set_viewport(NULL, vp_w, vp_h);
 }
 
-void PLATFORM_SoundContinue(void)
+static void bm_vo_free(void *sptr)
 {
-	sound_paused = FALSE;
+	struct vo_interface *vo = sptr;
+	vo_render_free(vo->renderer);
+	free(vo);
 }
 
-unsigned int PLATFORM_SoundAvailable(void)
+static struct vo_interface *bm_vo_new(void)
 {
-	/* Let the VideoCore tell us how much it has played. */
-	host_yield();
-	return host_sound_free_frames() * sound_channels * 2;
+	struct vo_interface *vo = vo_interface_new(sizeof(*vo));
+	struct vo_render *vr;
+
+	vo_interface_init(vo);
+	vr = vo_render_new(VO_RENDER_FMT_RGB565);
+	vo_set_renderer(vo, vr);
+	vo_render_set_buffer(vr, fb_pixels);
+	vr->buffer_pitch = fb_pitch_px;
+	vr->notify_frame_rate = DELEGATE_AS1(void, bool, bm_notify_frame_rate, vo);
+
+	vo->free = DELEGATE_AS0(void, bm_vo_free, vo);
+	vo->set_viewport = DELEGATE_AS2(void, int, int, bm_set_viewport, vo);
+	vo->draw = DELEGATE_AS0(void, bm_draw, vo);
+	/* The whole display: XRoar's picture area is the 4:3 part of it. */
+	vo_set_draw_area(vo, 0, 0, 640, 480);
+	bm_vo = vo;
+	bm_set_viewport(NULL, vp_w, vp_h);
+	return vo;
 }
 
-void PLATFORM_SoundWrite(UBYTE const *buffer, unsigned int size)
+double bmcoco_refresh_rate(void)
 {
-	host_sound_write((const int16_t *) buffer, size / (sound_channels * 2));
+	return refresh_rate;
 }
 
-/* Keeps the audio output fed with silence while emulation is paused, so it
-   restarts cleanly. */
+double bmcoco_machine_rate(void)
+{
+	return machine_rate;
+}
+
+int bmcoco_vsync_locked(void)
+{
+	return vsync_lock;
+}
+
+void bmcoco_video_settings_changed(void)
+{
+	update_sync_mode();
+	apply_view();
+}
+
+int bmcoco_turbo(void)
+{
+	return turbo;
+}
+
+/* ---- Sound ------------------------------------------------------------------- */
+
+#define AO_RATE 44100
+#define AO_FRAGMENT 512
+
+static int16_t ao_fragment[AO_FRAGMENT];
+static unsigned ao_rate;          /* 0 if there's no sound */
+static unsigned ao_latency;       /* frames */
+static int ao_corrections;
+static const int16_t silence[1024];
+
+static void open_sound(void)
+{
+	unsigned ms = (unsigned) host_option_int("audio_buffer_ms", 60);
+	if (ms < 20)
+		ms = 20;
+	if (ms > 500)
+		ms = 500;
+	ao_latency = AO_RATE * ms / 1000;
+	ao_rate = host_sound_open(AO_RATE, 1, ao_latency);
+	if (ao_rate == 0)
+		LOG_WARN("BMCoco: no sound\n");
+}
+
+void bmcoco_sound_settings_changed(void)
+{
+	open_sound();
+}
+
+/* Keeps the sound output fed while the emulation isn't running. */
 static void feed_silence(void)
 {
 	unsigned frames;
-	if (sound_hw_rate == 0)
+	if (ao_rate == 0)
 		return;
 	frames = host_sound_free_frames();
-	if (frames > 2048)
-		frames = 2048;
-	if (frames > 0)
-		host_sound_write(silence, frames);
-}
-
-/* ---- Time ------------------------------------------------------------------- */
-
-/* atari800's clock: real time plus the sleeps it asked for that were
-   skipped. Atari800_Sync() moves its target on by one Atari frame (which
-   its sound speed adjustment can stretch by 5%) every frame, and only
-   catches up when it falls behind, never when it gets ahead. With the
-   display doing the pacing its sleeps are skipped, so against real time it
-   would drift ahead, by a minute or more in a long session, and the first
-   sleep in a menu would then wait for all of it. Counting the skipped
-   sleeps keeps the two together. */
-static double skipped_sleep = 0.0;
-#define MAX_SLEEP 0.25
-
-double PLATFORM_Time(void)
-{
-	return host_time() + skipped_sleep;
-}
-
-void PLATFORM_Sleep(double s)
-{
-	/* With the emulation locked to the display, the wait for vertical blank
-	   does the pacing; atari800's timer would only make frames late. */
-	if (s <= 0.0 || (vsync_lock && !UI_is_active && !Atari800_turbo)) {
-		if (s > 0.0)
-			skipped_sleep += s;
-		host_yield();
-		return;
-	}
-	/* No wait atari800 asks for is ever this long (a frame is 20 ms). If it
-	   does, its clock has got ahead of real time somehow: move it on rather
-	   than leave the menus deaf until real time catches up. */
-	if (s > MAX_SLEEP) {
-		char msg[64];
-		snprintf(msg, sizeof(msg), "atari800's clock was %.2f s ahead; moved on", s);
-		host_log(msg);
-		skipped_sleep += s - MAX_SLEEP;
-		s = MAX_SLEEP;
-	}
-	host_sleep_us((unsigned) (s * 1000000.0));
-	/* Menus wait here between key presses without drawing frames. */
-	if (sound_paused)
-		feed_silence();
-}
-
-/* ---- Screen ----------------------------------------------------------------- */
-
-/* Reopens the sound output after the sound rate has changed. */
-static void restart_sound(void)
-{
-	if (Sound_enabled) {
-		Sound_Setup();
-		if (!UI_is_active)
-			Sound_Continue();
-	}
-}
-
-void PLATFORM_DisplayScreen(void)
-{
-	int wait;
-
-	if (Atari800_tv_mode != vsync_tv_mode) {
-		/* PAL/NTSC changed: the frame rate and the sound rate follow. */
-		update_sync_mode();
-		restart_sound();
-	} else if (vsync_lock && refine_refresh_rate()) {
-		restart_sound();
-	}
-
-	if (message_frames > 0 && !UI_is_active) {
-		message_frames--;
-		draw_message();
-	}
-
-	if (!draw_direct) {
-		const UBYTE *src = (const UBYTE *) Screen_atari;
-		uint8_t *dst = fb_pixels;
-		int y;
-		for (y = 0; y < Screen_HEIGHT; y++) {
-			memcpy(dst, src, Screen_WIDTH);
-			src += Screen_WIDTH;
-			dst += fb_pitch;
+	/* Keep it about half full, ready for when the emulation goes on. */
+	if (frames > ao_latency / 2) {
+		frames -= ao_latency / 2;
+		while (frames > 0) {
+			unsigned n = frames > 1024 ? 1024 : frames;
+			host_sound_write(silence, n);
+			frames -= n;
 		}
 	}
-
-	if (sound_paused)
-		feed_silence();
-
-	wait = !Atari800_turbo && (vsync_lock || UI_is_active);
-	host_video_present(wait);
-	if (wait)
-		track_refresh_rate();
 }
 
-/* ---- Files ------------------------------------------------------------------ */
+/* A fragment from XRoar. The emulation runs at the display's pace or a
+   timer's, never quite the sound output's, so the buffer is kept about half
+   full by dropping or repeating a sample when it strays. One sample in 512
+   is far below what can be heard, and more than covers the 0.1% between an
+   NTSC CoCo and a 60 Hz display. */
+static void play_fragment(const int16_t *samples, unsigned n)
+{
+	static int16_t buf[AO_FRAGMENT + 1];
+	unsigned free_frames, used;
+	if (ao_rate == 0)
+		return;
+	free_frames = host_sound_free_frames();
+	used = free_frames < ao_latency ? ao_latency - free_frames : 0;
 
-/* atari800 writes to disk images without flushing them, and the SD card's
-   file system caches what it can. Since the Pi can be switched off at any
-   time, push everything out to the card once a second. Files that have not
-   been written to cost almost nothing. */
-static void sync_files(void)
+	if (turbo) {
+		/* Far too much sound: play what fits. */
+		if (n > free_frames)
+			n = free_frames;
+		if (n > 0)
+			host_sound_write(samples, n);
+		return;
+	}
+	if (used < ao_latency / 4 && n < AO_FRAGMENT + 1) {
+		/* Running dry: one sample more. */
+		memcpy(buf, samples, n * sizeof(*samples));
+		buf[n] = samples[n - 1];
+		samples = buf;
+		n++;
+		ao_corrections++;
+	} else if (used > (ao_latency * 3) / 4 && n > 1) {
+		/* Getting full: one sample less. */
+		n--;
+		ao_corrections--;
+	}
+	if (n > free_frames) {
+		/* No room at all (the emulation got far ahead): drop it. */
+		n = free_frames;
+	}
+	if (n > 0)
+		host_sound_write(samples, n);
+}
+
+static void *ao_write_buffer(void *sptr, void *buffer)
+{
+	(void) sptr;
+	if (buffer != NULL)
+		play_fragment(buffer, AO_FRAGMENT);
+	return ao_fragment;
+}
+
+static void *ao_write_silence(void *sptr, void *buffer)
+{
+	(void) sptr;
+	feed_silence();
+	return buffer;
+}
+
+static void ao_free(void *sptr)
+{
+	struct ao_interface *ao = sptr;
+	sound_interface_free(ao->sound_interface);
+	free(ao);
+}
+
+static void *ao_new(void *cfg)
+{
+	struct ao_interface *ao = xmalloc(sizeof(*ao));
+	(void) cfg;
+	*ao = (struct ao_interface){0};
+	ao->free = DELEGATE_AS0(void, ao_free, ao);
+	ao->sound_interface = sound_interface_new(NULL, SOUND_FMT_S16_HE, AO_RATE, 1, AO_FRAGMENT);
+	if (ao->sound_interface == NULL) {
+		free(ao);
+		return NULL;
+	}
+	ao->sound_interface->write_buffer = DELEGATE_AS1(voidp, voidp, ao_write_buffer, ao);
+	ao->sound_interface->write_silence = DELEGATE_AS1(voidp, voidp, ao_write_silence, ao);
+	return ao;
+}
+
+static struct module ao_bmcoco_module = {
+	.name = "bmcoco", .description = "BMCoco sound (HDMI or headphones)",
+	.new = ao_new,
+};
+
+static struct module * const bmcoco_ao_module_list[] = {
+	&ao_bmcoco_module, NULL
+};
+
+/* ---- The user interface module -------------------------------------------- */
+
+extern struct module filereq_null_module;
+
+static struct module * const bmcoco_filereq_module_list[] = {
+	&filereq_null_module, NULL
+};
+
+static struct joystick_module * const bmcoco_js_module_list[] = {
+	&bmcoco_js_mod, NULL
+};
+
+static void ui_free(void *sptr)
+{
+	free(sptr);
+}
+
+static void *ui_new(void *cfg)
+{
+	struct ui_interface *ui = xmalloc(sizeof(*ui));
+	(void) cfg;
+	*ui = (struct ui_interface){0};
+	ui->free = DELEGATE_AS0(void, ui_free, ui);
+	ui->vo_interface = bm_vo_new();
+	/* XRoar's host keyboard tables (each front end sets them up). */
+	hk_init();
+	bmcoco_menu_attach();
+	return ui;
+}
+
+static struct ui_module ui_bmcoco_module = {
+	.common = { .name = "bmcoco", .description = "BMCoco", .new = ui_new },
+	.filereq_module_list = bmcoco_filereq_module_list,
+	.ao_module_list = bmcoco_ao_module_list,
+	.joystick_module_list = bmcoco_js_module_list,
+};
+
+static struct ui_module * const bmcoco_ui_module_list[] = {
+	&ui_bmcoco_module, NULL
+};
+
+/* ---- Machines and ROMs ------------------------------------------------------- */
+
+static int machine_works(struct machine_config *mc)
+{
+	const struct partdb_entry *pe;
+	const struct machine_partdb_entry *mpe;
+	if (mc == NULL)
+		return FALSE;
+	pe = partdb_find_entry(mc->architecture);
+	if (pe == NULL || !partdb_ent_is_a(pe, "machine"))
+		return FALSE;
+	mpe = (const struct machine_partdb_entry *) pe;
+	return mpe->is_working_config != NULL && mpe->is_working_config(mc);
+}
+
+/* Adds "name" to LIST if the ROM isn't found. */
+static void check_rom(char *list, size_t size, const char *rom)
+{
+	sds path;
+	if (rom == NULL)
+		return;
+	path = romlist_find(rom);
+	if (path != NULL) {
+		sdsfree(path);
+		return;
+	}
+	/* "@coco" is a list of names: the first is the usual one. */
+	if (rom[0] == '@') {
+		static const struct { const char *list; const char *file; } usual[] = {
+			{"@coco", "bas13.rom"}, {"@coco_ext", "extbas11.rom"},
+			{"@coco1", "bas10.rom"}, {"@coco1e", "bas11.rom"},
+			{"@coco1e_ext", "extbas10.rom"}, {"@coco2", "bas12.rom"},
+			{"@coco2_ext", "extbas11.rom"}, {"@coco2b", "bas13.rom"},
+			{"@coco3", "coco3.rom"}, {"@coco3p", "coco3p.rom"},
+			{"@mc10", "mc10.rom"}, {"@dragon32", "d32.rom"},
+			{"@dragon64", "d64_1.rom"}, {"@dragon64_alt", "d64_2.rom"},
+			{"@deluxecoco", "deluxe.rom"},
+		};
+		unsigned i;
+		for (i = 0; i < sizeof(usual) / sizeof(usual[0]); i++) {
+			if (strcmp(rom, usual[i].list) == 0) {
+				rom = usual[i].file;
+				break;
+			}
+		}
+	}
+	if (strstr(list, rom) != NULL)
+		return;
+	if (list[0] != '\0')
+		strncat(list, ", ", size - strlen(list) - 1);
+	strncat(list, rom[0] == '@' ? rom + 1 : rom, size - strlen(list) - 1);
+}
+
+const char *bmcoco_missing_roms(void)
+{
+	static char missing[128];
+	struct machine_config *mc = xroar.machine_config;
+	missing[0] = '\0';
+	if (mc == NULL || machine_works(mc))
+		return NULL;
+	check_rom(missing, sizeof(missing), mc->bas_rom);
+	check_rom(missing, sizeof(missing), mc->extbas_rom);
+	check_rom(missing, sizeof(missing), mc->altbas_rom);
+	return missing[0] != '\0' ? missing : "the machine's ROMs";
+}
+
+/* Without machine= in cmdline.txt, start the first CoCo there are ROMs for
+   (XRoar on its own would prefer a Dragon). */
+static void choose_machine(void)
+{
+	static const char *const preferred[] = {
+		"coco2bus", "cocous", "coco3", "coco2b", "coco", "coco3p",
+		"deluxecoco", "mc10", "dragon64", "dragon32", NULL
+	};
+	int i;
+	if (host_option("machine", NULL) != NULL)
+		return;
+	for (i = 0; preferred[i] != NULL; i++) {
+		struct machine_config *mc = machine_config_by_name(preferred[i]);
+		if (mc != NULL && machine_works(mc)) {
+			if (mc != xroar.machine_config)
+				ui_update_state(-1, ui_tag_machine, mc->id, NULL);
+			return;
+		}
+	}
+	/* None: stay with a CoCo 2, which tells what it's missing. */
+	{
+		struct machine_config *mc = machine_config_by_name("coco2bus");
+		if (mc != NULL && mc != xroar.machine_config)
+			ui_update_state(-1, ui_tag_machine, mc->id, NULL);
+	}
+}
+
+/* ---- Files ---------------------------------------------------------------- */
+
+/* XRoar writes disk images back only when they're ejected, and the SD
+   card's file system caches what it can. Since the Pi can be switched off
+   at any time, write changed disks once they have been left alone for two
+   seconds, and push everything out to the card. */
+static double disk_dirty_since;
+
+static int disks_dirty(void)
+{
+	unsigned drive;
+	if (xroar.vdrive_interface == NULL)
+		return FALSE;
+	for (drive = 0; drive < 4; drive++) {
+		struct vdisk *disk = vdrive_disk_in_drive(xroar.vdrive_interface, drive);
+		if (disk != NULL && disk->dirty && disk->write_back)
+			return TRUE;
+	}
+	return FALSE;
+}
+
+static void sync_files(int force)
 {
 	int fd;
+	if (disks_dirty()) {
+		double now = host_time();
+		if (disk_dirty_since == 0.0)
+			disk_dirty_since = now;
+		if (force || now - disk_dirty_since >= 2.0) {
+			vdrive_flush(xroar.vdrive_interface);
+			disk_dirty_since = 0.0;
+		}
+	} else {
+		disk_dirty_since = 0.0;
+	}
 	fflush(NULL);
 	for (fd = 3; fd < 20; fd++)
 		fsync(fd);
 }
 
-/* ---- Configuration ---------------------------------------------------------- */
-
-void PLATFORM_ConfigInit(void)
-{
-	view_mode = VIEW_NORMAL;
-	/* Start in BASIC, like a real 800XL. Hold Option (F2) while booting a
-	   game that needs BASIC off, or turn it off in System Settings. */
-	Atari800_disable_basic = FALSE;
-}
-
-int PLATFORM_Configure(char *option, char *parameters)
-{
-	/* Older versions kept these in atari800.cfg. They are BMA800XL
-	   settings now, in bma800xl.cfg; skip them quietly. */
-	(void) parameters;
-	return strcmp(option, "BMA800XL_BORDER") == 0
-	    || strcmp(option, "BMA800XL_KEYPAD_JOYSTICK") == 0
-	    || strcmp(option, "BMA800XL_ARROW_JOYSTICK") == 0;
-}
-
-void PLATFORM_ConfigSave(FILE *fp)
-{
-	(void) fp;
-}
-
-/* ---- Requests from the web UI ----------------------------------------------- */
+/* ---- Requests from the web UI ------------------------------------------ */
 
 /* The web UI's server runs as a Circle task, which only runs when the
-   emulator yields, so these are only ever set between emulation steps. They
-   are acted on after the current frame, or, while a menu is open, by
-   BMA_MenuRequests(). */
+   emulator yields, so these are only ever set between emulation steps. */
 static volatile int request_power = -1;   /* 0 reboot, 1 power off */
 static volatile int request_coldstart = FALSE;
 static volatile int request_autostart = FALSE;
-static char autostart_path[FILENAME_MAX];
+static char autostart_path[512];
 
-void bma_request_power(int power_off)
+void bmcoco_request_power(int power_off)
 {
 	request_power = power_off ? 1 : 0;
 }
 
-void bma_request_coldstart(void)
+/* Called by the web UI. */
+void bmcoco_request_coldstart(void)
 {
 	request_coldstart = TRUE;
 }
@@ -464,18 +631,37 @@ void bma_request_coldstart(void)
 /* Name kept from BMC64, whose web UI code calls it. */
 void emu_autostart_interrupt(const char *path)
 {
-	Util_strlcpy(autostart_path, path, sizeof(autostart_path));
+	snprintf(autostart_path, sizeof(autostart_path), "%s", path);
 	request_autostart = TRUE;
 }
 
-static void handle_power_request(void)
+int bmcoco_pending_requests(void)
 {
+	return request_power >= 0 || request_coldstart || request_autostart;
+}
+
+static void handle_requests(void)
+{
+	if (request_autostart) {
+		request_autostart = FALSE;
+		LOG_PRINT("Web UI: starting %s\n", autostart_path);
+		xroar_load_file_by_type(autostart_path, 1);
+	}
+	if (request_coldstart) {
+		request_coldstart = FALSE;
+		LOG_PRINT("Web UI: hard reset\n");
+		xroar_hard_reset();
+	}
 	if (request_power >= 0) {
 		int power_off = request_power;
 		request_power = -1;
-		/* Shuts atari800 down, which closes the disk images. */
-		Atari800_Exit(FALSE);
-		sync_files();
+		/* Ejecting writes back changed disks. */
+		if (xroar.vdrive_interface != NULL) {
+			unsigned drive;
+			for (drive = 0; drive < 4; drive++)
+				vdrive_eject_disk(xroar.vdrive_interface, drive);
+		}
+		sync_files(TRUE);
 		if (power_off)
 			host_power_off();
 		else
@@ -483,303 +669,290 @@ static void handle_power_request(void)
 	}
 }
 
-static void handle_requests(void)
+/* ---- Menus waiting -------------------------------------------------------- */
+
+static double last_sync_time;
+
+void bmcoco_idle(void)
 {
-	if (request_autostart) {
-		request_autostart = FALSE;
-		Log_print("Web UI: starting %s", autostart_path);
-		if (AFILE_OpenFile(autostart_path, TRUE, 1, FALSE) == AFILE_ERROR)
-			Log_print("Cannot start %s", autostart_path);
+	double now = host_time();
+	feed_silence();
+	if (now - last_sync_time >= 1.0) {
+		last_sync_time = now;
+		sync_files(FALSE);
 	}
-	if (request_coldstart) {
-		request_coldstart = FALSE;
-		Log_print("Web UI: cold start");
-		Atari800_Coldstart();
-	}
-	handle_power_request();
+	if (request_power >= 0)
+		handle_requests();
 }
 
-/* The main loop doesn't run while a menu is open. Reboot and power off
-   happen at once; for anything else this returns TRUE, and the menus are
-   closed (see PLATFORM_Keyboard) so the main loop can do it. */
-int BMA_MenuRequests(void)
+/* ---- Timer pacing ----------------------------------------------------------- */
+
+/* Emulated time since the last resync, and the real time it started. */
+static double paced_emulated;
+static double paced_start;
+static event_ticks paced_last_tick;
+
+static void reset_pacing(void)
 {
-	handle_power_request();
-	return request_coldstart || request_autostart;
+	paced_emulated = 0.0;
+	paced_start = host_time();
+	paced_last_tick = event_current_tick;
+	have_vsync_tick = FALSE;
 }
 
-/* ---- On-screen message ------------------------------------------------------ */
-
-/* A small 5x7 font for the web UI's address, which atari800's own status
-   line can't show (it has no '.' or ':'). Only the characters used. */
-static const struct { char c; const char *rows[7]; } msg_font[] = {
-	{'0', {".###.", "#...#", "#..##", "#.#.#", "##..#", "#...#", ".###."}},
-	{'1', {"..#..", ".##..", "..#..", "..#..", "..#..", "..#..", ".###."}},
-	{'2', {".###.", "#...#", "....#", "...#.", "..#..", ".#...", "#####"}},
-	{'3', {"####.", "....#", "....#", ".###.", "....#", "....#", "####."}},
-	{'4', {"...#.", "..##.", ".#.#.", "#..#.", "#####", "...#.", "...#."}},
-	{'5', {"#####", "#....", "####.", "....#", "....#", "#...#", ".###."}},
-	{'6', {".###.", "#....", "#....", "####.", "#...#", "#...#", ".###."}},
-	{'7', {"#####", "....#", "...#.", "..#..", ".#...", ".#...", ".#..."}},
-	{'8', {".###.", "#...#", "#...#", ".###.", "#...#", "#...#", ".###."}},
-	{'9', {".###.", "#...#", "#...#", ".####", "....#", "....#", ".###."}},
-	{'.', {".....", ".....", ".....", ".....", ".....", ".##..", ".##.."}},
-	{':', {".....", ".##..", ".##..", ".....", ".##..", ".##..", "....."}},
-	{'/', {"....#", "....#", "...#.", "..#..", ".#...", "#....", "#...."}},
-	{'B', {"####.", "#...#", "#...#", "####.", "#...#", "#...#", "####."}},
-	{'E', {"#####", "#....", "#....", "####.", "#....", "#....", "#####"}},
-	{'H', {"#...#", "#...#", "#...#", "#####", "#...#", "#...#", "#...#"}},
-	{'I', {".###.", "..#..", "..#..", "..#..", "..#..", "..#..", ".###."}},
-	{'P', {"####.", "#...#", "#...#", "####.", "#....", "#....", "#...."}},
-	{'T', {"#####", "..#..", "..#..", "..#..", "..#..", "..#..", "..#.."}},
-	{'U', {"#...#", "#...#", "#...#", "#...#", "#...#", "#...#", ".###."}},
-	{'W', {"#...#", "#...#", "#...#", "#.#.#", "#.#.#", "##.##", "#...#"}},
-};
-
-static char message[48];
-
-/* Draws MESSAGE centred near the bottom of the visible screen. */
-static void draw_message(void)
+/* After a slice of emulation: wait until real time catches up with it. */
+static void pace(void)
 {
-	int len = (int) strlen(message);
-	int width = len * 6 + 2;
-	int x0 = (Screen_visible_x1 + Screen_visible_x2 - width) / 2;
-	int y0 = Screen_visible_y2 - 14;
-	UBYTE *screen = (UBYTE *) Screen_atari;
-	int i, x, y;
-
-	if (x0 < 0)
-		x0 = 0;
-	for (y = 0; y < 11; y++)
-		memset(screen + (y0 + y) * Screen_WIDTH + x0, 0x00, width);
-	for (i = 0; i < len; i++) {
-		unsigned k;
-		for (k = 0; k < sizeof(msg_font) / sizeof(msg_font[0]); k++)
-			if (msg_font[k].c == message[i])
-				break;
-		if (k == sizeof(msg_font) / sizeof(msg_font[0]))
-			continue; /* space or unknown */
-		for (y = 0; y < 7; y++)
-			for (x = 0; x < 5; x++)
-				if (msg_font[k].rows[y][x] == '#')
-					screen[(y0 + 2 + y) * Screen_WIDTH + x0 + 2 + i * 6 + x] = 0x0f;
+	double ahead;
+	paced_emulated += (double) (event_ticks) (event_current_tick - paced_last_tick)
+	                  / (double) EVENT_TICK_RATE;
+	paced_last_tick = event_current_tick;
+	if (vsync_lock || turbo) {
+		/* The display does the pacing (or nothing does). */
+		paced_emulated = 0.0;
+		paced_start = host_time();
+		return;
+	}
+	ahead = paced_emulated - (host_time() - paced_start);
+	if (ahead > 0.001) {
+		host_sleep_us((unsigned) (ahead * 1000000.0));
+	} else if (ahead < -0.25) {
+		/* Fell well behind (loading, a slow moment): don't race to
+		   catch up. */
+		paced_emulated = 0.0;
+		paced_start = host_time();
 	}
 }
 
-/* Shows the web UI's address on screen once the network is up. */
+void bmcoco_set_turbo(int on)
+{
+	turbo = on;
+	osd_notify(on ? "Turbo on" : "Turbo off");
+	reset_pacing();
+}
+
+/* ---- Input --------------------------------------------------------------- */
+
+static int open_menu;
+static int pad_last_menu[HOST_PADS];
+
+static void process_input(void)
+{
+	int usage, pressed, pad;
+	while (host_key_event(&usage, &pressed)) {
+		if (usage == KEY_MENU) {
+			if (pressed)
+				open_menu = TRUE;
+			continue;
+		}
+		if (usage == KEY_TURBO) {
+			if (pressed)
+				bmcoco_set_turbo(!turbo);
+			continue;
+		}
+		if (usage == KEY_RESET) {
+			if (pressed) {
+				if (host_key_modifiers() & 0x22) {
+					osd_notify("Hard reset");
+					xroar_hard_reset();
+				} else {
+					osd_notify("Reset");
+					xroar_soft_reset();
+				}
+			}
+			continue;
+		}
+		/* With Ctrl held, XRoar's keyboard code runs emulator commands
+		   meant for its desktop versions (Ctrl+Q quits); the CoCo has no
+		   Ctrl key (the CoCo 3's is on Caps Lock and the Windows keys). */
+		if (usage < 0 || usage > 0xff || usage == USAGE_LCTRL || usage == USAGE_RCTRL)
+			continue;
+		if (pressed)
+			hk_scan_press((uint8_t) usage);
+		else
+			hk_scan_release((uint8_t) usage);
+	}
+
+	/* Gamepad Home, or Select and Start together, open the menu. */
+	for (pad = 0; pad < HOST_PADS; pad++) {
+		int state = host_pad_state(pad);
+		int menu;
+		if (state < 0)
+			state = 0;
+		menu = (state & HOST_PAD_HOME)
+		       || ((state & HOST_PAD_SELECT) && (state & HOST_PAD_START));
+		if (menu && !pad_last_menu[pad])
+			open_menu = TRUE;
+		pad_last_menu[pad] = menu;
+	}
+	bmcoco_pad_keys();
+}
+
+/* ---- Main loop --------------------------------------------------------------- */
+
+/* Shows the web UI's address once the network is up. */
 static void show_network_address(void)
 {
-	static int shown = FALSE;
-	char ip[32];
-	if (shown || !host_network_address(ip, sizeof(ip)))
+	static int shown;
+	char address[32];
+	if (shown || !option_on("webui", TRUE))
 		return;
-	shown = TRUE;
-	snprintf(message, sizeof(message), "WEB UI: HTTP://%s/", ip);
-	message_frames = 15 * 50;
-	Log_print("Web UI: http://%s/", ip);
-}
-
-/* ---- Start up and shut down ------------------------------------------------- */
-
-int PLATFORM_Initialise(int *argc, char *argv[])
-{
-	if (host_video_init(Screen_WIDTH, Screen_HEIGHT, &fb_pixels, &fb_pitch) != 0) {
-		Log_print("Cannot initialise the display");
-		return FALSE;
+	if (host_network_address(address, sizeof(address))) {
+		char text[64];
+		snprintf(text, sizeof(text), "Web UI: http://%s/", address);
+		osd_notify(text);
+		shown = TRUE;
 	}
-	/* Let atari800 draw straight into the frame buffer when the layout
-	   matches. Screen_Initialise only allocates a screen if none is set. */
-	if (fb_pitch == Screen_WIDTH && Screen_atari == NULL) {
-		Screen_atari = (ULONG *) fb_pixels;
-		draw_direct = TRUE;
-	}
-	memset(fb_pixels, 0, fb_pitch * Screen_HEIGHT);
-
-	read_border_setting();
-	apply_view();
-	PLATFORM_PaletteUpdate();
-
-	measure_refresh_rate();
-	update_sync_mode();
-
-	BMA_KeyboardInit();
-
-	crash_logging_driver = UI_BASIC_driver;
-	crash_logging_driver.fInit = crash_logging_init;
-	UI_driver = &crash_logging_driver;
-
-	if (!Sound_Initialise(argc, argv))
-		return FALSE;
-
-	return TRUE;
 }
 
-int PLATFORM_Exit(int run_monitor)
-{
-	Log_flushlog();
-
-	if (run_monitor) {
-		/* There is no monitor console unless one is wired to the serial
-		   port; keep the emulation running. */
-		if (host_option_int("serial_monitor", 0))
-			return MONITOR_Run();
-		return TRUE;
-	}
-
-	return FALSE;
-}
-
-static void bma_on_exit(void)
-{
-	/* atari800 has shut down and closed its files: start again. */
-	host_reboot();
-}
-
-/* Directory holding atari800.cfg and the ROM folder. Only the PC test
-   harness changes it. */
-static const char *sd_root(void)
-{
-	return host_option("root", "/");
-}
-
-/* ---- For the BMA800XL menu ---------------------------------------------------- */
-
-const char *BMA_SdRoot(void)
-{
-	return sd_root();
-}
-
-double BMA_RefreshRate(void)
-{
-	return refresh_rate;
-}
-
-/* The frame lock or border setting changed. */
-void BMA_VideoSettingsChanged(void)
-{
-	update_sync_mode();
-	restart_sound();
-	read_border_setting();
-	apply_view();
-}
-
-/* Builds atari800's command line from cmdline.txt options. */
+/* Builds XRoar's command line from cmdline.txt options. */
 static int build_args(char **argv, int max)
 {
-	static char argv0[FILENAME_MAX];
 	int argc = 0;
 	const char *value;
 
-	/* atari800 keeps atari800.cfg, and looks for ROMs, in the directory of
-	   argv[0]: the root of the SD card. */
-	Util_catpath(argv0, sd_root(), "atari800");
-	argv[argc++] = argv0;
+	argv[argc++] = "xroar";
 
 	value = host_option("machine", NULL);
-	if (value != NULL) {
-		if (strcmp(value, "400") == 0 || strcmp(value, "800") == 0)
-			argv[argc++] = "-atari";
-		else if (strcmp(value, "1200xl") == 0)
-			argv[argc++] = "-1200";
-		else if (strcmp(value, "xe") == 0 || strcmp(value, "130xe") == 0)
-			argv[argc++] = "-xe";
-		else if (strcmp(value, "320xe") == 0)
-			argv[argc++] = "-320xe";
-		else if (strcmp(value, "xegs") == 0)
-			argv[argc++] = "-xegs";
-		else if (strcmp(value, "5200") == 0)
-			argv[argc++] = "-5200";
-		else
-			argv[argc++] = "-xl";
+	if (value != NULL && *value != '\0') {
+		argv[argc++] = "-default-machine";
+		argv[argc++] = (char *) value;
 	}
 
-	value = host_option("tv", NULL);
-	if (value != NULL)
-		argv[argc++] = strcmp(value, "ntsc") == 0 ? "-ntsc" : "-pal";
+	/* Keyboard layout for "typed characters" mode and the menus. */
+	value = host_option("keyboard", "us");
+	argv[argc++] = "-kbd-lang";
+	argv[argc++] = (char *) value;
 
-	value = host_option("basic", NULL);
-	if (value != NULL)
-		argv[argc++] = strcmp(value, "1") == 0 || strcmp(value, "on") == 0
-		               ? "-basic" : "-nobasic";
+	/* Keys type the characters printed on them (Shift+' types "), rather
+	   than being the CoCo key in the same place. The menu turns it off
+	   for games that want the CoCo's layout. */
+	argv[argc++] = option_on("typed_keys", TRUE) ? "-kbd-translate" : "-no-kbd-translate";
 
-	/* A disk, program or cartridge to start: autostart=/games/foo.atr */
+	/* Artifact colour renderer: none, simple, 5bit, partial, simulated. */
+	value = host_option("artifacts", NULL);
+	if (value != NULL && *value != '\0') {
+		argv[argc++] = "-ccr";
+		argv[argc++] = (char *) value;
+	}
+
+	/* Picture area: zoomed, title, action, underscan. */
+	value = host_option("picture", NULL);
+	if (value != NULL && *value != '\0') {
+		argv[argc++] = "-vo-picture";
+		argv[argc++] = (char *) value;
+	}
+
+	/* cmp (S-Video), cmp-br, cmp-rb (composite: artifact colours) or rgb. */
+	value = host_option("tv_input", NULL);
+	if (value != NULL && *value != '\0') {
+		argv[argc++] = "-tv-input";
+		argv[argc++] = (char *) value;
+	}
+
+	/* Which joystick is plugged into each port: joy0, joy1, kjoy0. */
+	value = host_option("joy_right", NULL);
+	if (value != NULL && *value != '\0') {
+		argv[argc++] = "-joy-right";
+		argv[argc++] = (char *) value;
+	}
+	value = host_option("joy_left", NULL);
+	if (value != NULL && *value != '\0') {
+		argv[argc++] = "-joy-left";
+		argv[argc++] = (char *) value;
+	}
+
+	argv[argc++] = "-volume";
+	argv[argc++] = (char *) host_option("volume", "70");
+
+	/* A disk, tape, cartridge or program to start: autostart=/games/x.dsk */
 	value = host_option("autostart", NULL);
-	if (value != NULL && *value != '\0' && argc < max) {
-		argv[argc++] = strdup(value);
+	if (value != NULL && *value != '\0' && argc + 2 <= max) {
+		argv[argc++] = "-run";
+		argv[argc++] = (char *) value;
 	}
 
 	argv[argc] = NULL;
 	return argc;
 }
 
-void bma800xl_main(void)
+static void fatal(const char *text)
 {
-	static char *argv[16];
-	int argc = build_args(argv, 14);
-	int frames_since_sync = 0;
+	LOG_ERROR("%s\n", text);
+	osd_open();
+	osd_message(text, FALSE);
+	for (;;) {
+		bmcoco_idle();
+		host_video_present(TRUE);
+	}
+}
 
-	atexit(bma_on_exit);
+void bmcoco_main(void)
+{
+	static char *argv[40];
+	int argc, pitch;
+	double last_second;
 
-	if (!Atari800_Initialise(&argc, argv)) {
-		host_log("atari800 failed to start; see the serial log");
+	if (host_video_init(FB_W, FB_H, &fb_pixels, &pitch) != 0) {
+		LOG_ERROR("BMCoco: no display\n");
 		for (;;)
 			host_sleep_us(1000000);
 	}
+	fb_pitch_px = pitch / 2;
+	clear_framebuffer();
+	apply_view();
+	measure_refresh_rate();
+	open_sound();
 
-	/* The file browser starts in the SD card's root unless the
-	   configuration says otherwise. */
-	if (UI_n_atari_files_dir == 0) {
-		Util_strlcpy(UI_atari_files_dir[0], sd_root(), FILENAME_MAX);
-		UI_n_atari_files_dir = 1;
+	argc = build_args(argv, 38);
+	ui_module_list = bmcoco_ui_module_list;
+	if (xroar_init(argc, argv) == NULL)
+		fatal("XRoar did not start. The log (see the User Guide) says why.");
+	xroar_init_finish();
+	choose_machine();
+
+	{
+		const char *missing = bmcoco_missing_roms();
+		if (missing != NULL) {
+			char text[320];
+			snprintf(text, sizeof(text),
+			         "ROMs not found: %s\n\n"
+			         "Copy the Color Computer ROM files into the roms folder "
+			         "on the SD card (see ROMS.txt there), then restart.\n\n"
+			         "Press F12 for the menu.", missing);
+			LOG_WARN("BMCoco: ROMs not found: %s\n", missing);
+			osd_message(text, TRUE);
+		}
 	}
-	if (UI_n_saved_files_dir == 0) {
-		Util_strlcpy(UI_saved_files_dir[0], sd_root(), FILENAME_MAX);
-		UI_n_saved_files_dir = 1;
-	}
+
+	reset_pacing();
+	last_second = host_time();
 
 	for (;;) {
-		INPUT_key_code = PLATFORM_Keyboard();
+		double now;
 
-		/* F1, Home or Select+Start open the BMA800XL menu, which leads on
-		   to atari800's. Alt+letter shortcuts go straight to atari800's. */
-		if (INPUT_key_code == AKEY_UI && UI_alt_function < 0) {
-			if (!BMA_Menu())
-				INPUT_key_code = AKEY_NONE;
+		process_input();
+		if (open_menu) {
+			open_menu = FALSE;
+			hk_focus_in();
+			bmcoco_menu();
+			/* Keys held when the menu closed must not stick. */
+			hk_focus_in();
+			reset_pacing();
 		}
 
-		if (INPUT_key_code == AKEY_KEYB) {
-			/* The on-screen keyboard (F11): pick one key to press. */
-			Sound_Pause();
-			UI_BASIC_in_kbui = TRUE;
-			INPUT_key_code = UI_BASIC_OnScreenKeyboard(NULL, Atari800_machine_type);
-			UI_BASIC_in_kbui = FALSE;
-			switch (INPUT_key_code) {
-			case AKEY_OPTION:
-				INPUT_key_consol &= ~INPUT_CONSOL_OPTION;
-				break;
-			case AKEY_SELECT:
-				INPUT_key_consol &= ~INPUT_CONSOL_SELECT;
-				break;
-			case AKEY_START:
-				INPUT_key_consol &= ~INPUT_CONSOL_START;
-				break;
-			}
-			/* Don't let the key that closed it reach the emulation. */
-			while (PLATFORM_Keyboard() != AKEY_NONE)
-				Atari800_Sync();
-			Sound_Continue();
-		}
+		xroar_run(EVENT_MS(10));
+		pace();
 
-		Atari800_Frame();
-		if (Atari800_display_screen)
-			PLATFORM_DisplayScreen();
-		else
-			host_yield();
-
-		if (++frames_since_sync >= 50) {
-			frames_since_sync = 0;
-			sync_files();
+		now = host_time();
+		if (now - last_second >= 1.0) {
+			last_second = now;
+			sync_files(FALSE);
 			show_network_address();
+			if (ao_corrections > 200 || ao_corrections < -200) {
+				LOG_DEBUG(1, "BMCoco: sound rate corrections %+d\n", ao_corrections);
+			}
+			ao_corrections = 0;
 		}
 		handle_requests();
 	}

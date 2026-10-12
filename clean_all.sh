@@ -1,9 +1,8 @@
 #!/bin/bash
 #
-# Cleans everything: the kernel, the compiled atari800 library, the SD card
+# Cleans everything: the kernel, the compiled XRoar library, the SD card
 # staging folder, and the third party builds inside circle-stdlib (which is
-# also reset to its pinned revision, undoing src/patches/). atari800 is
-# reset too.
+# also reset to its pinned revision, undoing src/patches/).
 #
 #   ./clean_all.sh [--keep-sdcard]
 #
@@ -13,7 +12,7 @@
 
 if [ ! -f sdcard/config.txt ]
 then
-    echo "Must be run from the BMA800XL root directory." >&2
+    echo "Must be run from the BMCoco root directory." >&2
     exit 1
 fi
 
@@ -52,7 +51,5 @@ do
     (cd "$lib" && git reset -q --hard && git clean -q -fdx)
 done
 (cd libs/circle/addon/wlan/hostap 2>/dev/null && git reset -q --hard && git clean -q -fdx)
-
-(cd "$SRC_DIR/third_party/atari800" 2>/dev/null && git reset -q --hard && git clean -q -fd)
 
 echo "Clean."

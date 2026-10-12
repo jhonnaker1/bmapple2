@@ -276,12 +276,12 @@ boolean IsConfigFile(const char *name) {
   return FALSE;
 }
 
-// atari800.cfg and bma800xl.cfg (the BMA800XL menu's settings) are
+// xroar.conf and bmcoco.cfg (the BMCoco menu's settings) are
 // editable too, but (unlike the files above) stay uploadable so a prepared
 // copy can still be dropped on the card.
 boolean IsEditableName(const char *name) {
-  return IsConfigFile(name) || CiEqual(name, "atari800.cfg") ||
-         CiEqual(name, "bma800xl.cfg");
+  return IsConfigFile(name) || CiEqual(name, "xroar.conf") ||
+         CiEqual(name, "bmcoco.cfg");
 }
 
 // The config files are editable only in the volume root.

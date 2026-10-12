@@ -1,91 +1,61 @@
-# Updating atari800 and Circle
+# Updating XRoar and Circle
 
-## atari800
+## XRoar
 
-atari800 is a git submodule in `third_party/atari800`, pinned to a release
-tag. Nothing in that folder is edited; all of BMA800XL's own code is in
-`src/`. The few changes atari800 needs are patches,
-`src/patches/atari800_*.diff`, applied in the submodule by the build and
-test scripts (see `src/patches/README.md`). The connection points are:
+XRoar is a git submodule in `third_party/xroar`, from
+`https://www.6809.org.uk/git/xroar.git`, pinned to a release tag. It is used
+unmodified; everything specific to BMCoco is in `src/port/`:
 
-| File                   | Ties BMA800XL to                                    |
-|------------------------|-----------------------------------------------------|
-| `src/port/atari800.mk` | The list of atari800 source files to compile        |
-| `src/port/config.h`    | atari800's build options (normally made by configure) |
-| `src/port/platform.c`  | `PLATFORM_*` functions from atari800's `platform.h` |
-| `src/port/keyboard.c`  | `PLATFORM_Keyboard`, `PLATFORM_PORT`, `PLATFORM_TRIG` |
-| `src/patches/atari800_*.diff` | Changes to atari800 files (`ui_basic.c`) |
+| File | What it holds |
+| --- | --- |
+| `src/port/xroar.mk` | The list of XRoar source files to compile |
+| `src/port/config.h` | XRoar's build options (normally made by configure) |
+| `src/port/platform.c` | The user interface, video and sound modules |
+| `src/port/joystick.c` | The joystick module ("physical" joysticks) |
+| `src/port/menu.c` | The menu, which talks to XRoar through its UI messages |
+| `src/port/becker_stub.c`, `posix_extra.c` | Stand-ins for what doesn't build on newlib |
 
-### Steps
+To move to a new release:
 
-1. Move the submodule to the new release, first undoing the patches the
-   build applied in it:
+1. Check out the new tag in the submodule:
 
    ```
-   cd third_party/atari800
-   git reset --hard && git clean -fd
+   cd third_party/xroar
    git fetch --tags
-   git checkout ATARI800_7_3_0        # the new release tag
+   git checkout 1.13           # the new release tag
    cd ../..
    ```
 
-2. Look at what changed in the parts BMA800XL depends on:
+2. Compare the build files between the two tags:
 
    ```
-   cd third_party/atari800
-   git diff ATARI800_7_2_1 ATARI800_7_3_0 --stat -- src/Makefile.am configure.ac \
-       src/platform.h src/sound.h src/input.h src/akey.h src/ui.h src/ui_basic.h
+   cd third_party/xroar
+   git diff 1.12.1 1.13 --stat -- src/Makefile.am portalib/Makefile.am configure.ac
    ```
 
-   - **New or removed source files** (`src/Makefile.am`): add or remove them
-     in `src/port/atari800.mk`. Front ends for other systems (`sdl/`,
-     `atari_x11.c` and so on) are not needed.
-   - **New build options** (`configure.ac`, `AC_DEFINE`): decide whether
-     they belong in `src/port/config.h`. A quick way to see the full list is
-     to generate atari800's own `config.h` in a scratch copy:
+   - Sources added to or removed from `xroar_SOURCES` (or the machine,
+     cartridge and part sections BMCoco enables) go in `src/port/xroar.mk`.
+     Front ends for other systems (`sdl2/`, `gtk3/`, `x11/`, `alsa/` and so
+     on) are not needed.
+   - New `AC_DEFINE`s in `configure.ac` may need a line in
+     `src/port/config.h`. Never run configure inside `third_party/xroar`:
+     the generated `config.h` would be used instead of BMCoco's (the
+     Makefile stops if it finds one).
+   - Changes to `ui.h`, `vo.h`, `ao.h`, `sound.h`, `joystick.h` or `hkbd.h`
+     may need the same in `src/port/`.
 
-     ```
-     cp -r third_party/atari800 /tmp/a8 && cd /tmp/a8
-     ./autogen.sh && ./configure --with-video=sdl2 --with-sound=sdl2
-     grep '^#define' src/config.h
-     ```
-
-     Never run configure inside `third_party/atari800`: the generated
-     `src/config.h` would be used instead of BMA800XL's (the build stops if
-     it finds one).
-   - **Changed `PLATFORM_*` functions** (`platform.h`): update
-     `src/port/platform.c` or `src/port/keyboard.c`. atari800's SDL port
-     (`src/sdl/`) is the reference implementation to compare with.
-
-3. Check the atari800 patches. If upstream took a patch, delete it from
-   `src/patches/` (and its row in `src/patches/README.md`). Otherwise check
-   that it still applies:
+3. Build and test on the PC, then for the Pi:
 
    ```
-   cd third_party/atari800
-   for p in ../../src/patches/atari800_*.diff; do git apply --check "$p"; done
-   cd ../..
+   tools/hostsim/run_tests.sh
+   ./build_sdcard.sh
    ```
 
-   If one doesn't, rebase it in a clone (see `src/patches/README.md`).
-
-4. Build and test:
+4. Commit the submodule and any port changes together:
 
    ```
-   tools/hostsim/run_tests.sh      # on the PC
-   ./build_sdcard.sh               # the Pi kernel and SD card
-   ```
-
-   If the screenshots differ only because the new release looks different
-   (a new Altirra ROM version string, for example), refresh the reference
-   images with `tools/hostsim/run_tests.sh --update` and check the new ones
-   by eye.
-
-5. Commit the submodule change together with any port changes:
-
-   ```
-   git add third_party/atari800 src/port src/patches
-   git commit -m "Update atari800 to 7.3.0"
+   git add third_party/xroar src/port
+   git commit -m "Update XRoar to 1.13"
    ```
 
 ## circle-stdlib (Circle and newlib)

@@ -10,7 +10,7 @@ build/
 .board
 
 # Release archives
-bma800xl-*.zip
+bmcoco-*.zip
 
 # PC test harness
 tools/hostsim/build/

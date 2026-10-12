@@ -1,0 +1,19 @@
+Color Computer ROMs
+===================
+
+BMCoco needs the ROMs of the machine it emulates. They are copyrighted by
+Tandy and Microsoft, so they are not included: copy your own ROM images
+into this folder. XRoar finds them by file name:
+
+  CoCo 1/2 (the default)   bas13.rom      Color BASIC 1.3
+                           extbas11.rom   Extended Color BASIC 1.1
+  Disks (RS-DOS)           disk11.rom     Disk Extended Color BASIC 1.1
+                                          (or disk10.rom)
+  CoCo 3                   coco3.rom      Super Extended Color BASIC
+  MC-10                    mc10.rom
+
+Older versions also work: bas10.rom - bas12.rom, extbas10.rom. Dragon
+ROMs (d32.rom, d64_1.rom, d64_2.rom, ddos12a.rom) work too.
+
+BMCoco starts the first CoCo it has ROMs for: a CoCo 2 (NTSC), then a CoCo 3.
+Choose another in the menu (F12, Machine), or with machine= in cmdline.txt.

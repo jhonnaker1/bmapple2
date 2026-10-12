@@ -1,6 +1,6 @@
-/* Colours of the 1979 Atari 400/800: chocolate brown keys with cream
-   legends, the gold console keys, and the warm striped bands of the
-   period adverts. The old colour names are kept as the JS uses them. */
+/* Colours inherited from BMA800XL, after the 1979 Atari 400/800: chocolate
+   keys with cream legends, gold console keys, and the warm striped bands of
+   the period adverts. The old colour names are kept as the JS uses them. */
 :root {
   color-scheme: dark;
   --bg: #16100c;
@@ -557,8 +557,8 @@ body.modal-open { overflow: hidden; }
 
 /* ---------- name ---------- */
 
-/* BMA800XL in heavy, widely spaced capitals with the stripes under it,
-   in the spirit of the 1979 adverts (no Atari logo). */
+/* BMCoco in heavy, widely spaced capitals with the stripes under it,
+   in the spirit of 1970s adverts. */
 .sidebar-name, .welcome-text {
   font-family: var(--display);
   font-weight: 900;

@@ -1,27 +1,39 @@
 # Build Instructions
 
-These instructions have been tested on Debian and Ubuntu (and WSL). On other
-distributions, adjust the package commands.
+BMCoco builds on Linux (Debian, Ubuntu, WSL) and macOS.
 
 ## Prerequisites
 
+On Debian or Ubuntu:
+
 ```
-sudo apt-get install build-essential git python3 curl wget xz-utils texinfo imagemagick python3-pil
+sudo apt-get install build-essential git python3 curl xz-utils
 ```
 
-`texinfo` is needed because newlib's build runs `makeinfo`; `wget` fetches
-the Wi-Fi firmware; ImageMagick and Pillow are only used by the PC tests.
+On macOS (Apple silicon or Intel), with the Xcode command line tools and
+[Homebrew](https://brew.sh):
+
+```
+xcode-select --install
+brew install bash gnu-getopt
+```
+
+circle-stdlib's `configure` needs bash 4 or later and GNU `getopt`, which
+`make_all.sh` puts first on the PATH on macOS. newlib's build would like
+`makeinfo` (texinfo) for its manuals and Circle's Wi-Fi firmware download
+uses `wget`; without them, `make_all.sh` and `make_wifi_firmware.sh` use
+stand-ins (the manuals aren't needed, and `curl` does the download).
 
 The Arm GNU Toolchain 15.2.rel1 (`arm-none-eabi`) is downloaded into
-`~/.cache/bma800xl/toolchains` the first time a build needs it
+`~/.cache/bmcoco/toolchains` the first time a build needs it
 (`get_gnu_toolchain.sh`). If it can't be downloaded,
-`BMA800XL_ALLOW_ANY_TOOLCHAIN=1` lets the build use whatever
+`BMCOCO_ALLOW_ANY_TOOLCHAIN=1` lets the build use whatever
 `arm-none-eabi-gcc` is on the PATH.
 
 ## Downloading the files
 
 ```
-git clone --recursive https://github.com/aminch/bma800xl
+git clone --recursive <BMCoco repository URL>
 ```
 
 or, in an existing clone, `git submodule update --init --recursive`.
@@ -66,17 +78,26 @@ per board that picks its kernel.
 
 ## Testing on a PC
 
-`tools/hostsim` builds the emulator port (atari800 plus `src/port/`) for the
+`tools/hostsim` builds the emulator port (XRoar plus `src/port/`) for the
 PC, with a simulated display, sound and input in place of the Raspberry Pi.
-It runs scripted tests: booting to BASIC, typing, the menus, gamepads,
-loading a program, and checking the sound stays in step with the display.
+It runs scripted tests: booting, the display lock and timer pacing, the
+keyboard, analog and digital joysticks, the menu, web UI requests, saved
+settings, and checking the sound stays in step with the display.
 
 ```
 tools/hostsim/run_tests.sh
+BMCOCO_ROMS=/path/to/your/roms tools/hostsim/run_tests.sh
 ```
 
-Screenshots are written to `tools/hostsim/out/` and compared with
-`tools/hostsim/expected/`; `--update` replaces the reference images.
+The CoCo's ROMs can't be distributed, so the tests run a small stand-in
+ROM that `tools/hostsim/make_test_rom.py` assembles: it shows the keyboard
+matrix, the joysticks and a frame counter, and makes a sound. With
+`BMCOCO_ROMS` set, Color BASIC and the CoCo 3 are tested too. Screenshots
+(`.ppm`) are written to `tools/hostsim/out/`.
+
+To try the port interactively, build it (`make -C tools/hostsim`) and drive
+`tools/hostsim/build/bmcoco_sim` with a script; see the top of
+`tools/hostsim/host_sim.c` for the commands.
 
 ## The web UI
 
@@ -97,12 +118,15 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `src/vchiqsound*`            | Sound through the VideoCore (from BMC64)    |
 | `src/options.*`              | `cmdline.txt` options                       |
 | `src/host.h`                 | Interface between kernel and emulator       |
-| `src/port/platform.c`        | atari800 platform layer: display, sound, timing, main loop |
-| `src/port/keyboard.c`        | Keyboard, gamepads, joysticks               |
-| `src/port/config.h`          | atari800's build configuration              |
-| `src/port/atari800.mk`       | Which atari800 sources are built            |
+| `src/port/platform.c`        | XRoar's user interface, video and sound modules; timing; main loop |
+| `src/port/joystick.c`        | Gamepads and GPIO joysticks as the CoCo's joysticks |
+| `src/port/menu.c`, `osd.c`   | The menu and its on-screen display          |
+| `src/port/posix_extra.c`     | regcomp(), basename(), access() for newlib  |
+| `src/port/becker_stub.c`     | XRoar's Becker port, switched off           |
+| `src/port/config.h`          | XRoar's build configuration                 |
+| `src/port/xroar.mk`          | Which XRoar sources are built               |
 | `src/patches/`               | Changes applied to Circle by `make_all.sh`  |
 | `sdcard/`                    | Files for the SD card                       |
-| `third_party/atari800`       | atari800 (submodule)                        |
+| `third_party/xroar`          | XRoar (submodule)                           |
 | `third_party/circle-stdlib`  | Circle and newlib (submodule)               |
 | `tools/hostsim`              | PC test harness                             |

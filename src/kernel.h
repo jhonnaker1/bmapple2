@@ -1,15 +1,15 @@
 //
 // kernel.h
 //
-// The Circle kernel for BMA800XL: brings up the hardware, then runs the
-// atari800 emulator on core 1 while core 0 services USB.
+// The Circle kernel for BMCoco: brings up the hardware, then runs the
+// XRoar emulator on core 1 while core 0 services USB.
 //
-// This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMA800XL_KERNEL_H_
-#define BMA800XL_KERNEL_H_
+#ifndef BMCOCO_KERNEL_H_
+#define BMCOCO_KERNEL_H_
 
 #include <SDCard/emmc.h>
 #include <circle/actled.h>
@@ -65,11 +65,9 @@ public:
   TShutdownMode Run(void);
 
   // Called (through host.h) from the emulator on core 1.
-  int VideoInit(int width, int height, uint8_t **pixels, int *pitch);
+  int VideoInit(int width, int height, uint16_t **pixels, int *pitch);
   void DisplaySize(int *width, int *height);
   void VideoSetView(int x, int y, int w, int h, double aspect);
-  void VideoSetPalette(int index, uint32_t rgb);
-  void VideoUpdatePalette(void);
   void VideoPresent(int wait_vsync);
   unsigned SoundOpen(unsigned freq, int channels, unsigned latency_frames);
   void SoundClose(void);
@@ -79,6 +77,7 @@ public:
   int KeyDown(int usage);
   unsigned KeyModifiers(void);
   int PadState(int pad);
+  int PadAxis(int pad, int axis);
   int GpioJoystick(int port);
   double Time(void);
   void Reboot(void);
@@ -152,6 +151,8 @@ private:
 
   CUSBGamePadDevice *m_pGamePad[HOST_PADS];
   volatile int m_PadState[HOST_PADS];
+  // Left analog stick, 0..65535 per axis, or -1 without one.
+  volatile int m_PadAnalog[HOST_PADS][2];
   // Axes the direction is read from on pads Circle doesn't know.
   int m_PadAxisX[HOST_PADS];
   int m_PadAxisY[HOST_PADS];

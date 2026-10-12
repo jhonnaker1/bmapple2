@@ -1,16 +1,16 @@
 /*
  * host.h - services the Circle kernel provides to the emulator.
  *
- * The emulator (atari800 and the port in src/port/) is C and runs on core 1.
+ * The emulator (XRoar and the port in src/port/) is C and runs on core 1.
  * Everything it needs from the hardware goes through these functions, which
  * are implemented in src/kernel.cpp.
  *
- * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+ * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
  * Raspberry Pi. See LICENSE for licensing details.
  */
 
-#ifndef BMA800XL_HOST_H_
-#define BMA800XL_HOST_H_
+#ifndef BMCOCO_HOST_H_
+#define BMCOCO_HOST_H_
 
 #include <stdint.h>
 
@@ -24,7 +24,7 @@ const char *host_option(const char *name, const char *default_value);
 int host_option_int(const char *name, int default_value);
 double host_option_double(const char *name, double default_value);
 /* Changes a setting, which then wins over cmdline.txt; host_options_save()
-   writes the settings to bma800xl.cfg on the SD card. Both return 0 on
+   writes the settings to bmcoco.cfg on the SD card. Both return 0 on
    failure. */
 int host_option_set(const char *name, const char *value);
 int host_options_save(void);
@@ -39,19 +39,14 @@ void host_yield(void);
 
 /* ---- Video --------------------------------------------------------------- */
 
-/* Allocates the emulator's 8 bit indexed frame buffer. */
-int host_video_init(int width, int height, uint8_t **pixels, int *pitch);
+/* Allocates the emulator's RGB565 frame buffer. PITCH is in bytes. */
+int host_video_init(int width, int height, uint16_t **pixels, int *pitch);
 /* Area of the frame buffer that is shown, and its display aspect ratio
    (width / height). */
 void host_video_set_view(int x, int y, int w, int h, double aspect);
-/* Sets palette entry INDEX to 0xRRGGBB. Takes effect at host_video_update_palette. */
-void host_video_set_palette(int index, uint32_t rgb);
-void host_video_update_palette(void);
 /* Shows the frame buffer. With WAIT_VSYNC, returns after the next vertical
    blank, which paces the emulation to the display. */
 void host_video_present(int wait_vsync);
-/* Refresh rate of the display in Hz. */
-double host_video_refresh_rate(void);
 
 /* ---- Sound --------------------------------------------------------------- */
 
@@ -99,6 +94,11 @@ unsigned host_key_modifiers(void);
    pad is connected there. */
 int host_pad_state(int pad);
 
+/* Position of the left analog stick of USB gamepad PAD, AXIS 0 (x) or 1 (y),
+   from 0 (left/up) to 65535 (right/down), or -1 if the pad has no analog
+   stick (or none is connected there). */
+int host_pad_axis(int pad, int axis);
+
 /* State of the joystick wired to GPIO port PORT (0 or 1), as HOST_JOY_* bits.
    Always 0 when GPIO joysticks are disabled. */
 int host_gpio_joystick(int port);
@@ -132,7 +132,7 @@ void host_log(const char *message);
 /* Where the log goes (enable_logging=off|uart|file). */
 #define HOST_LOG_OFF  0
 #define HOST_LOG_UART 1  /* serial port, GPIO14/15 at 115200 */
-#define HOST_LOG_FILE 2  /* /bma800xl.log on the SD card */
+#define HOST_LOG_FILE 2  /* /bmcoco.log on the SD card */
 int host_log_destination(void);
 /* Changes it at once. Returns 0 if the log file cannot be opened. */
 int host_set_log_destination(int destination);
@@ -141,4 +141,4 @@ int host_set_log_destination(int destination);
 }
 #endif
 
-#endif /* BMA800XL_HOST_H_ */
+#endif /* BMCOCO_HOST_H_ */

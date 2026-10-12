@@ -1,15 +1,13 @@
-## 1.0.1 – 2026-10-11
+## 0.1.0 – 2026-10-12
 
-- Raspberry Pi 2 support
-
-## 1.0.0 – 2026-10-11
-
-- Inital release: atari800 bare metal on the Raspberry Pi 3 and Zero 2 W
-- Boots into BASIC, no ROM files needed
-- Frames locked to the display refresh
-- USB keyboards and gamepads, GPIO joysticks
-- BMA800XL menu
-- Ethernet / Wi-Fi with the WebUI
-- CRT shaders
-- Keyboard layouts (US, UK, Norwegian)
-- Logging to UART or file
+- First version: BMCoco, forked from BMA800XL 1.0.1, with the atari800
+  emulator replaced by XRoar 1.12.1
+- Tandy Color Computer 1, 2 and 3 (and the Dragon and MC-10, from XRoar)
+- Frames locked to the display refresh; timer pacing otherwise
+- NTSC artifact colours, S-Video and RGB
+- Disks (RS-DOS), tapes, cartridges and machine code programs
+- USB keyboards (typed characters or the CoCo's layout), gamepads as analog
+  joysticks, GPIO joysticks
+- On-screen menu (F12) drawn in the CoCo 3's font
+- Ethernet / Wi-Fi with BMC64's web UI
+- Builds on Linux and macOS

@@ -2,7 +2,7 @@
 	path = third_party/circle-stdlib
 	url = https://github.com/smuehlst/circle-stdlib
 	ignore = dirty
-[submodule "third_party/atari800"]
-	path = third_party/atari800
-	url = https://github.com/atari800/atari800
+[submodule "third_party/xroar"]
+	path = third_party/xroar
+	url = https://www.6809.org.uk/git/xroar.git
 	ignore = dirty

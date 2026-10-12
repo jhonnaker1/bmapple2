@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 WLAN_FIRMWARE_DIR="$SCRIPT_DIR/third_party/circle-stdlib/libs/circle/addon/wlan/firmware"
-FIRMWARE_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bma800xl/wlan-firmware"
+FIRMWARE_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bmcoco/wlan-firmware"
 FIRMWARE_LICENSE_URL_BASE="https://raw.githubusercontent.com/RPi-Distro/firmware-nonfree"
 
 WLAN_FIRMWARE=(
@@ -67,11 +67,34 @@ then
     download_dir=$(mktemp -d "$FIRMWARE_CACHE_DIR/.downloading.XXXXXX")
     trap 'rm -rf "$download_dir"' EXIT
     echo "Downloading the Wi-Fi firmware ($firmware_revision)"
+    # Circle's Makefile uses wget, which macOS doesn't have: a stand-in
+    # passes its "wget -q -O FILE URL" to curl.
+    if ! command -v wget >/dev/null 2>&1
+    then
+        wget_dir=$(mktemp -d "$FIRMWARE_CACHE_DIR/.wget.XXXXXX")
+        cat > "$wget_dir/wget" <<'WGET'
+#!/bin/sh
+# Stand-in for wget (see make_wifi_firmware.sh): wget -q -O FILE URL
+out=
+while [ $# -gt 1 ]
+do
+    case "$1" in
+        -O) shift; out=$1 ;;
+    esac
+    shift
+done
+exec curl --fail --silent --show-error --location --retry 3 -o "$out" "$1"
+WGET
+        chmod +x "$wget_dir/wget"
+        PATH="$wget_dir:$PATH"
+        trap 'rm -rf "$download_dir" "$wget_dir"' EXIT
+    fi
     make -s -C "$download_dir" -f "$WLAN_FIRMWARE_DIR/Makefile" \
         FIRMWARE="$firmware_revision" firmware
     mkdir -p "$(dirname "$firmware_cache_dir")"
     rm -rf "$firmware_cache_dir"
     mv "$download_dir" "$firmware_cache_dir"
+    rm -rf "${wget_dir:-}"
     trap - EXIT
 fi
 

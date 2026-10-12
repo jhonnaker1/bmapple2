@@ -23,15 +23,15 @@
 
 namespace {
 
-// What atari800 can start directly (afile.c): disk images, executables,
-// BASIC programs, cartridges and tapes.
+// What XRoar can start directly (xroar_load_file_by_type): disk images,
+// tapes, cartridges and machine code programs.
 const char *const kRunTypes[] = {
-    "atr", "atx", "xfd", "dcm", "pro", "xex", "com", "exe", "obx", "bas",
-    "lst", "car", "rom", "bin", "a52", "cas", 0,
+    "dsk", "vdk", "jvc", "os9", "dmk", "cas", "c10", "k7", "ccc", "rom",
+    "bin", "hex", "s19", 0,
 };
 
 const WebUiMachine kMachine = {
-    "Atari 800XL", "/atari800.cfg", kRunTypes, "",
+    "Tandy Color Computer", "/xroar.conf", kRunTypes, "",
 };
 
 char Lower(char c) {

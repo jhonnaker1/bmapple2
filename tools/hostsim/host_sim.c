@@ -1,22 +1,26 @@
 /*
- * host_sim.c - runs the BMA800XL emulator port on a PC for testing.
+ * host_sim.c - runs the BMCoco emulator port on a PC for testing.
  *
  * Implements src/host.h with a simulated display, sound output and input,
- * so atari800 and the port in src/port/ can be tested without a Raspberry
- * Pi. Time is virtual: each display refresh advances the clock by one frame
- * of a 50 Hz (or REFRESH Hz) display, so tests run as fast as the PC allows.
+ * so XRoar and the port in src/port/ can be tested without a Raspberry Pi.
+ * Time is virtual: each display refresh advances the clock by one frame of
+ * a 60 Hz (or BMCOCO_REFRESH Hz) display, so tests run as fast as the PC
+ * allows.
  *
  * A script on standard input drives the test, one command per line:
  *
  *   <frame> key <usage> <0|1>     press or release a key (USB HID usage)
  *   <frame> type <text>            type text (US layout, one key per frame)
  *   <frame> pad <n> <bits>         set gamepad n to HOST_PAD_* bits
+ *   <frame> axis <n> <x> <y>       gamepad n's analog stick (0-65535, -1 none)
+ *   <frame> gpio <port> <bits>     GPIO joystick port to HOST_JOY_* bits
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
  *   <frame> webui <reboot|coldstart>  a request from the web UI
+ *   <frame> run <path>             the web UI starts a file
  *   <frame> quit                   end the test
  *
- * This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+ * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
  * Raspberry Pi. See LICENSE for licensing details.
  */
 
@@ -27,15 +31,16 @@
 #include "../../src/host.h"
 
 /* From src/port/platform.c, called by the web UI on the Pi. */
-void bma_request_power(int power_off);
-void bma_request_coldstart(void);
+void bmcoco_request_power(int power_off);
+void bmcoco_request_coldstart(void);
+void emu_autostart_interrupt(const char *path);
 
 /* ---- Options ---------------------------------------------------------------- */
 
 static const char *option(const char *name)
 {
 	static char buf[1024];
-	const char *cmdline = getenv("BMA_CMDLINE");
+	const char *cmdline = getenv("BMCOCO_CMDLINE");
 	char *p, *save = NULL;
 	size_t n = strlen(name);
 	if (cmdline == NULL)
@@ -48,8 +53,8 @@ static const char *option(const char *name)
 	return NULL;
 }
 
-/* Settings changed by the menu, which win over BMA_CMDLINE, as
-   bma800xl.cfg does on the Pi. Saved to ./bma800xl.cfg. */
+/* Settings changed by the menu, which win over BMCOCO_CMDLINE, as
+   bmcoco.cfg does on the Pi. Saved to ./bmcoco.cfg. */
 static char set_name[48][24], set_value[48][72];
 static int n_set;
 
@@ -70,7 +75,7 @@ int host_option_set(const char *name, const char *value)
 
 int host_options_save(void)
 {
-	FILE *f = fopen("bma800xl.cfg", "w");
+	FILE *f = fopen("bmcoco.cfg", "w");
 	int i;
 	if (f == NULL)
 		return 0;
@@ -97,20 +102,20 @@ const char *host_option(const char *name, const char *default_value)
 
 int host_option_int(const char *name, int default_value)
 {
-	const char *v = option(name);
+	const char *v = host_option(name, NULL);
 	return v ? atoi(v) : default_value;
 }
 
 double host_option_double(const char *name, double default_value)
 {
-	const char *v = option(name);
+	const char *v = host_option(name, NULL);
 	return v ? atof(v) : default_value;
 }
 
 /* ---- Time ----------------------------------------------------------------- */
 
 static double now = 0.0;
-static double refresh = 50.0;
+static double refresh = 60.0;
 static double refresh_later = 0.0;  /* refresh rate after start up */
 static long frame = 0;
 static long presents = 0;
@@ -129,7 +134,7 @@ static int snd_channels = 1;
 static unsigned snd_capacity = 0;
 static double snd_buffered = 0;   /* frames queued at the "VideoCore" */
 static double snd_last = 0.0;
-static long snd_written = 0, snd_underruns = 0, snd_writes = 0;
+static long snd_written = 0, snd_underruns = 0, snd_writes = 0, snd_nonzero = 0;
 static double snd_min_fill = 1e9, snd_max_fill = 0;
 
 static void sound_advance(void)
@@ -167,16 +172,17 @@ void host_sound_close(void) {}
 unsigned host_sound_free_frames(void)
 {
 	sound_advance();
-	/* BMA_SOUND_HALF=1 offers only half the buffer, which keeps atari800's
-	   own sound buffer fuller, as the VideoCore's late reports do on a Pi. */
-	double cap = getenv("BMA_SOUND_HALF") ? snd_capacity / 2.0 : snd_capacity;
+	double cap = snd_capacity;
 	return snd_buffered >= cap ? 0 : (unsigned) (cap - snd_buffered);
 }
 
 void host_sound_write(const int16_t *samples, unsigned frames)
 {
-	(void) samples;
+	unsigned i;
 	sound_advance();
+	for (i = 0; i < frames * snd_channels; i++)
+		if (samples[i] != samples[0])
+			snd_nonzero++;
 	if (snd_written > HW_RATE * 2) {
 		if (snd_buffered < snd_min_fill) snd_min_fill = snd_buffered;
 	}
@@ -190,18 +196,18 @@ void host_sound_write(const int16_t *samples, unsigned frames)
 
 /* ---- Video ---------------------------------------------------------------- */
 
-static uint8_t *fb;
-static int fb_w, fb_h;
-static uint32_t palette[256];
+static uint16_t *fb;
+static int fb_w, fb_h, fb_pitch;
 static int view_x, view_y, view_w, view_h;
 
-int host_video_init(int width, int height, uint8_t **pixels, int *pitch)
+int host_video_init(int width, int height, uint16_t **pixels, int *pitch)
 {
 	fb_w = width;
 	fb_h = height;
-	fb = calloc(width, height);
+	fb_pitch = width;
+	fb = calloc(width * height, 2);
 	*pixels = fb;
-	*pitch = width;
+	*pitch = width * 2;
 	return 0;
 }
 
@@ -211,23 +217,22 @@ void host_video_set_view(int x, int y, int w, int h, double aspect)
 	fprintf(stderr, "[sim] view %dx%d at %d,%d aspect %.3f\n", w, h, x, y, aspect);
 }
 
-void host_video_set_palette(int index, uint32_t rgb) { palette[index] = rgb; }
-void host_video_update_palette(void) {}
-
+/* Saves the visible screen with each line twice, so it looks as on a TV. */
 static void screenshot(const char *name)
 {
 	FILE *f = fopen(name, "wb");
-	int x, y;
+	int x, y, r;
 	if (!f)
 		return;
-	fprintf(f, "P6\n%d %d\n255\n", view_w, view_h);
+	fprintf(f, "P6\n%d %d\n255\n", view_w, view_h * 2);
 	for (y = view_y; y < view_y + view_h; y++)
-		for (x = view_x; x < view_x + view_w; x++) {
-			uint32_t c = palette[fb[y * fb_w + x]];
-			fputc((c >> 16) & 0xff, f);
-			fputc((c >> 8) & 0xff, f);
-			fputc(c & 0xff, f);
-		}
+		for (r = 0; r < 2; r++)
+			for (x = view_x; x < view_x + view_w; x++) {
+				uint16_t c = fb[y * fb_pitch + x];
+				fputc(((c >> 11) & 0x1f) * 255 / 31, f);
+				fputc(((c >> 5) & 0x3f) * 255 / 63, f);
+				fputc((c & 0x1f) * 255 / 31, f);
+			}
 	fclose(f);
 	fprintf(stderr, "[sim] frame %ld: saved %s\n", frame, name);
 }
@@ -239,6 +244,8 @@ static int q_usage[QSIZE], q_pressed[QSIZE];
 static int q_head, q_tail;
 static unsigned char key_state[256];
 static int pads[HOST_PADS] = {-1, -1, -1, -1};
+static int pad_axes[HOST_PADS][2] = {{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}};
+static int gpio[2];
 
 static void push_key(int usage, int pressed)
 {
@@ -272,7 +279,14 @@ unsigned host_key_modifiers(void)
 }
 
 int host_pad_state(int pad) { return pad >= 0 && pad < HOST_PADS ? pads[pad] : -1; }
-int host_gpio_joystick(int port) { (void) port; return 0; }
+int host_pad_axis(int pad, int axis)
+{
+	if (pad < 0 || pad >= HOST_PADS || axis < 0 || axis > 1 || pads[pad] < 0)
+		return -1;
+	return pad_axes[pad][axis];
+}
+
+int host_gpio_joystick(int port) { return port >= 0 && port < 2 ? gpio[port] : 0; }
 
 /* US layout: character to (usage, shift). */
 static int char_usage(int c, int *shift)
@@ -300,15 +314,22 @@ static int char_usage(int c, int *shift)
 	return 0;
 }
 
-/* Pending typed text: one key down per frame, released the frame after. */
+/* Pending typed text: each key held for 3 frames and released for 3, about
+   as fast as a quick typist, and slow enough for Color BASIC's keyboard
+   scan. */
 static char typing[1024];
-static int typing_pos = -1, typing_up = 0;
+static int typing_pos = -1, typing_up = 0, typing_wait = 0;
 
 static void type_step(void)
 {
 	int shift, u;
 	if (typing_pos < 0)
 		return;
+	if (typing_wait > 0) {
+		typing_wait--;
+		return;
+	}
+	typing_wait = 2;
 	if (typing_up) {
 		u = char_usage(typing[typing_pos], &shift);
 		push_key(u, 0);
@@ -371,17 +392,30 @@ static void run_script(void)
 			int pad, bits;
 			sscanf(line + n, "%d %i", &pad, &bits);
 			pads[pad] = bits;
+		} else if (strcmp(cmd, "axis") == 0) {
+			int pad, x, y;
+			sscanf(line + n, "%d %d %d", &pad, &x, &y);
+			pad_axes[pad][0] = x;
+			pad_axes[pad][1] = y;
+		} else if (strcmp(cmd, "gpio") == 0) {
+			int port, bits;
+			sscanf(line + n, "%d %i", &port, &bits);
+			gpio[port & 1] = bits;
+		} else if (strcmp(cmd, "run") == 0) {
+			emu_autostart_interrupt(line + n + 1);
 		} else if (strcmp(cmd, "shot") == 0) {
 			screenshot(line + n + 1);
 		} else if (strcmp(cmd, "webui") == 0) {
 			if (strstr(line + n, "reboot"))
-				bma_request_power(0);
+				bmcoco_request_power(0);
 			else if (strstr(line + n, "coldstart"))
-				bma_request_coldstart();
+				bmcoco_request_coldstart();
 		} else if (strcmp(cmd, "audio") == 0) {
 			fprintf(stderr, "[sim] frame %ld: audio written %ld frames in %ld writes, "
-			        "queue before write min %.0f, after write max %.0f, underruns %ld\n",
-			        frame, snd_written, snd_writes, snd_min_fill, snd_max_fill, snd_underruns);
+			        "queue before write min %.0f, after write max %.0f, underruns %ld, "
+			        "changing samples %ld\n",
+			        frame, snd_written, snd_writes, snd_min_fill, snd_max_fill, snd_underruns,
+			        snd_nonzero);
 			fprintf(stderr, "[sim] frame %ld: %ld frames presented\n", frame, presents);
 		} else if (strcmp(cmd, "quit") == 0) {
 			fprintf(stderr, "[sim] quit at frame %ld (%.2f s)\n", frame, now);
@@ -435,7 +469,7 @@ void host_power_off(void)
 
 int host_network_address(char *address, unsigned size)
 {
-	const char *ip = getenv("BMA_IP");
+	const char *ip = getenv("BMCOCO_IP");
 	if (ip == NULL || frame < 100)
 		return 0;
 	snprintf(address, size, "%s", ip);
@@ -451,17 +485,17 @@ void host_network_status(char *text, unsigned size)
 		snprintf(text, size, "Off");
 }
 
-/* BMA_WIFI=1 pretends Wi-Fi is running, with a few networks around. */
+/* BMCOCO_WIFI=1 pretends Wi-Fi is running, with a few networks around. */
 int host_wifi_scan(struct host_wifi_ap *aps, int max)
 {
 	static const struct host_wifi_ap found[] = {
 		{"CoffeeShop", -71, 0},
 		{"StdWiFiPoint", -48, 1},
 		{"A very long network name, 32 ch", -80, 1},
-		{"KåfféØst", -60, 0},
+		{"CoCoNet", -60, 0},
 	};
 	int i, n = (int) (sizeof(found) / sizeof(found[0]));
-	if (getenv("BMA_WIFI") == NULL)
+	if (getenv("BMCOCO_WIFI") == NULL)
 		return -1;
 	for (i = 0; i < n && i < max; i++)
 		aps[i] = found[i];
@@ -499,16 +533,16 @@ int host_set_log_destination(int destination)
 	return 1;
 }
 
-extern void bma800xl_main(void);
+extern void bmcoco_main(void);
 
 int main(void)
 {
-	const char *r = getenv("BMA_REFRESH");
+	const char *r = getenv("BMCOCO_REFRESH");
 	if (r)
 		refresh = atof(r);
-	r = getenv("BMA_REFRESH_LATER");
+	r = getenv("BMCOCO_REFRESH_LATER");
 	if (r)
 		refresh_later = atof(r);
-	bma800xl_main();
+	bmcoco_main();
 	return 0;
 }

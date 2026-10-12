@@ -20,7 +20,7 @@
 #ifndef _webui_h
 #define _webui_h
 
-// BMA800XL always builds the web UI.
+// BMCoco always builds the web UI.
 #define BMC64_WEBUI 1
 
 class CNetSubSystem;

@@ -1,7 +1,7 @@
 //
 // kernel.cpp
 //
-// This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
 //
 // Parts of the USB, frame buffer and sound handling are based on BMC64.
@@ -23,10 +23,10 @@
 
 extern "C" {
 // The emulator's entry point, in src/port/platform.c. Runs on core 1.
-void bma800xl_main(void);
+void bmcoco_main(void);
 }
 
-static const char FromKernel[] = "bma800xl";
+static const char FromKernel[] = "bmcoco";
 
 // Sample rate the VideoCore plays audio at.
 #define HW_SAMPLE_RATE 44100
@@ -39,8 +39,8 @@ static const char FromKernel[] = "bma800xl";
 // code that is config_0_joystickPins; its config_1 is the keyboard PCB).
 // Pins are active low with pull ups. Order: up, down, left, right, fire.
 static const unsigned kJoyGpio[2][5] = {
-    {17, 18, 27, 22, 23}, // Atari joystick port 1
-    {5, 6, 12, 13, 19},   // Atari joystick port 2
+    {17, 18, 27, 22, 23}, // Joystick 1 (the CoCo's right port)
+    {5, 6, 12, 13, 19},   // Joystick 2 (the CoCo's left port)
 };
 
 CKernel *CKernel::s_pThis = 0;
@@ -73,7 +73,7 @@ void CEmulatorCore::Run(unsigned nCore) {
     while (!m_bLaunch) {
       DataMemBarrier();
     }
-    bma800xl_main();
+    bmcoco_main();
   }
 
   // Nothing else runs here.
@@ -106,6 +106,7 @@ CKernel::CKernel(void)
   for (unsigned i = 0; i < HOST_PADS; i++) {
     m_pGamePad[i] = 0;
     m_PadState[i] = -1;
+    m_PadAnalog[i][0] = m_PadAnalog[i][1] = -1;
     m_PadAxisX[i] = 0;
     m_PadAxisY[i] = 1;
   }
@@ -128,8 +129,8 @@ bool CKernel::Initialize(void) {
   if (!mLogger.Initialize(&mLog)) {
     return false;
   }
-  mLogger.Write(FromKernel, LogNotice, "BMA800XL " BMA800XL_VERSION " (" BMA800XL_GIT
-                ", atari800 " A8_VERSION ")");
+  mLogger.Write(FromKernel, LogNotice, "BMCoco " BMCOCO_VERSION " (" BMCOCO_GIT
+                ", XRoar " XROAR_VERSION ")");
 
   if (!mTimer.Initialize()) {
     return false;
@@ -147,8 +148,8 @@ bool CKernel::Initialize(void) {
     mLogger.Write(FromKernel, LogError, "Cannot mount the SD card");
     return false;
   }
-  // Settings saved by the BMA800XL menu win over cmdline.txt.
-  mOptions.LoadSettings("SD:/bma800xl.cfg");
+  // Settings saved by the BMCoco menu win over cmdline.txt.
+  mOptions.LoadSettings("SD:/bmcoco.cfg");
 
   // Until here the log went to the serial port.
   const char *logging = mOptions.Get("enable_logging", "uart");
@@ -178,15 +179,9 @@ bool CKernel::Initialize(void) {
     mAudioOut = VCHIQSoundDestinationHeadphones;
   }
 
-  // Volume in percent (0..100) of full scale.
-  int volume = mOptions.GetInt("volume", 100);
-  if (volume < 0) {
-    volume = 0;
-  } else if (volume > 100) {
-    volume = 100;
-  }
-  // VCHIQ volume is in 1/100 dB; map 0..100% onto -60..0 dB.
-  mVolume = volume == 0 ? VCHIQ_SOUND_VOLUME_MIN : (volume - 100) * 60;
+  // Full scale: the volume (volume= in cmdline.txt and the menu) is
+  // XRoar's, so it can change while running.
+  mVolume = 0;
 
   FrameBufferLayer::Initialize();
 
@@ -411,6 +406,7 @@ void CKernel::GamePadRemovedHandler(CDevice *pDevice, void *pContext) {
     if (k->m_pGamePad[i] == pDevice) {
       k->m_pGamePad[i] = 0;
       k->m_PadState[i] = -1;
+      k->m_PadAnalog[i][0] = k->m_PadAnalog[i][1] = -1;
     }
   }
 }
@@ -435,6 +431,25 @@ static int AxisDirection(const TGamePadState *pState, int axis) {
     return 1;
   }
   return 0;
+}
+
+// Position of an axis scaled to 0..65535, or -1 if there is no such axis.
+static int AxisPosition(const TGamePadState *pState, int axis) {
+  if (axis >= pState->naxes) {
+    return -1;
+  }
+  int min = pState->axes[axis].minimum;
+  int max = pState->axes[axis].maximum;
+  if (max <= min) {
+    return -1;
+  }
+  int value = pState->axes[axis].value;
+  if (value < min) {
+    value = min;
+  } else if (value > max) {
+    value = max;
+  }
+  return (int)(((long long)(value - min) * 65535) / (max - min));
 }
 
 // USB interrupt context, core 0.
@@ -505,6 +520,22 @@ void CKernel::GamePadStatusHandler(unsigned nDeviceIndex,
   if (y < 0) state |= HOST_PAD_UP;
   if (y > 0) state |= HOST_PAD_DOWN;
 
+  // The same stick as a position, for the CoCo's analog joysticks. Pads
+  // whose D-pad is reported as axes (kPadProfiles) have no stick.
+  int ax = -1;
+  int ay = -1;
+  if (known) {
+    ax = AxisPosition(pState, GamePadAxisLeftX);
+    ay = AxisPosition(pState, GamePadAxisLeftY);
+  } else if (k->m_PadAxisX[nDeviceIndex] == 0) {
+    ax = AxisPosition(pState, 0);
+    ay = AxisPosition(pState, 1);
+  }
+  if (ax < 0 || ay < 0) {
+    ax = ay = -1;
+  }
+  k->m_PadAnalog[nDeviceIndex][0] = ax;
+  k->m_PadAnalog[nDeviceIndex][1] = ay;
   k->m_PadState[nDeviceIndex] = state;
 }
 
@@ -513,6 +544,14 @@ int CKernel::PadState(int pad) {
     return -1;
   }
   return m_PadState[pad];
+}
+
+int CKernel::PadAxis(int pad, int axis) {
+  if (pad < 0 || pad >= HOST_PADS || axis < 0 || axis > 1 ||
+      m_PadState[pad] < 0) {
+    return -1;
+  }
+  return m_PadAnalog[pad][axis];
 }
 
 //
@@ -549,14 +588,14 @@ int CKernel::GpioJoystick(int port) {
 // Video
 //
 
-int CKernel::VideoInit(int width, int height, uint8_t **pixels, int *pitch) {
+int CKernel::VideoInit(int width, int height, uint16_t **pixels, int *pitch) {
   if (mOptions.GetBool("crt_shader", false)) {
     mFrameBuffer.SetUsesShader(true);
   }
   if (mOptions.GetBool("smooth", false)) {
     FrameBufferLayer::SetInterpolation(1);
   }
-  int ret = mFrameBuffer.Allocate(0 /* 8 bit indexed */, pixels, width,
+  int ret = mFrameBuffer.Allocate(1 /* RGB565 */, (uint8_t **)pixels, width,
                                   height, pitch);
   if (ret != 0) {
     mLogger.Write(FromKernel, LogError, "Cannot allocate frame buffer");
@@ -570,10 +609,6 @@ int CKernel::VideoInit(int width, int height, uint8_t **pixels, int *pitch) {
         true /* multisample */, 6.0f, 0.12f, 1.5f, 2.4f, 2.2f,
         false /* sharper */, mOptions.GetBool("smooth", false));
   }
-  for (int i = 0; i < 256; i++) {
-    mFrameBuffer.SetPalette(i, (uint16_t)0);
-  }
-  mFrameBuffer.UpdatePalette();
   return 0;
 }
 
@@ -593,21 +628,11 @@ void CKernel::VideoSetView(int x, int y, int w, int h, double aspect) {
   mFrameBuffer.Show();
 }
 
-void CKernel::VideoSetPalette(int index, uint32_t rgb) {
-  unsigned r = (rgb >> 16) & 0xff;
-  unsigned g = (rgb >> 8) & 0xff;
-  unsigned b = rgb & 0xff;
-  uint16_t rgb565 = (uint16_t)(((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3));
-  mFrameBuffer.SetPalette((uint8_t)index, rgb565);
-}
-
 void CKernel::DisplaySize(int *width, int *height) {
   int fb_w, fb_h, src_w, src_h, dst_w, dst_h;
   mFrameBuffer.GetDimensions(width, height, &fb_w, &fb_h, &src_w, &src_h,
                              &dst_w, &dst_h);
 }
-
-void CKernel::VideoUpdatePalette(void) { mFrameBuffer.UpdatePalette(); }
 
 void CKernel::VideoPresent(int wait_vsync) {
   // Let Circle's tasks (VCHIQ in particular) run once per frame.
@@ -794,19 +819,13 @@ void host_sleep_us(unsigned us) {
 
 void host_yield(void) { CScheduler::Get()->Yield(); }
 
-int host_video_init(int width, int height, uint8_t **pixels, int *pitch) {
+int host_video_init(int width, int height, uint16_t **pixels, int *pitch) {
   return CKernel::Get()->VideoInit(width, height, pixels, pitch);
 }
 
 void host_video_set_view(int x, int y, int w, int h, double aspect) {
   CKernel::Get()->VideoSetView(x, y, w, h, aspect);
 }
-
-void host_video_set_palette(int index, uint32_t rgb) {
-  CKernel::Get()->VideoSetPalette(index, rgb);
-}
-
-void host_video_update_palette(void) { CKernel::Get()->VideoUpdatePalette(); }
 
 void host_video_present(int wait_vsync) {
   CKernel::Get()->VideoPresent(wait_vsync);
@@ -835,6 +854,8 @@ int host_key_down(int usage) { return CKernel::Get()->KeyDown(usage); }
 unsigned host_key_modifiers(void) { return CKernel::Get()->KeyModifiers(); }
 
 int host_pad_state(int pad) { return CKernel::Get()->PadState(pad); }
+
+int host_pad_axis(int pad, int axis) { return CKernel::Get()->PadAxis(pad, axis); }
 
 int host_gpio_joystick(int port) { return CKernel::Get()->GpioJoystick(port); }
 

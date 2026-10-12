@@ -1,70 +1,77 @@
-# BMA800XL
+# BMCoco
 
-BMA800XL is a bare metal Atari 800XL emulator for the Raspberry Pi 2 and 3. It runs
-the [atari800](https://github.com/atari800/atari800) emulator directly on the
-hardware, with no Linux underneath, using the same approach as
-[BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64.
+BMCoco is a bare metal Tandy Color Computer emulator for the Raspberry Pi 2
+and 3. It runs the [XRoar](https://www.6809.org.uk/xroar/) emulator directly
+on the hardware, with no Linux underneath, the same way
+[BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64 and
+[BMA800XL](https://github.com/aminch/bma800xl) for the Atari 800XL. It is a
+fork of BMA800XL with the Atari emulator replaced by XRoar.
 
-- Boots straight into Atari BASIC
-- Frames locked to the display's refresh for perfectly smooth scrolling (50 Hz
-  for PAL, 60 Hz for NTSC), with the sound kept in step
-- Low latency between input and picture/sound
-- No shutdown needed: just switch it off (disk writes are flushed every second)
-- Runs without any ROM files, using the free Altirra OS and BASIC built into
-  atari800; real Atari ROMs can be added
-- Emulates the 400/800, 1200XL, 800XL, 130XE, 320XE, XEGS and 5200
-- Disk images (ATR, ATX, XFD, DCM, PRO), programs (XEX, COM, EXE, BAS),
-  cartridges (CAR, ROM, BIN) and tapes (CAS)
-- USB keyboards and gamepads, the numeric keypad as a joystick, and real
-  Atari joysticks wired to the GPIO header
-- A BMA800XL menu (F1) for network, controllers, video and sound settings,
-  with atari800's own menus one item away for everything else
+- Boots straight into Color BASIC in a couple of seconds
+- Emulates the CoCo 1, 2 and 3 (and, from the same code, the Dragon 32/64
+  and the MC-10)
+- Frames locked to the display's refresh for perfectly smooth scrolling
+  (60 Hz for an NTSC CoCo), with the sound kept in step
+- NTSC artifact colours, as CoCo games expect, or S-Video and RGB
+- Disk images (DSK, VDK, JVC, OS9, DMK) with RS-DOS, tapes (CAS), cartridges
+  (CCC, ROM) and machine code programs (BIN, HEX, S19)
+- USB keyboards; USB gamepads as the CoCo's analog joysticks (an analog stick
+  gives the full 0-63 range); real joysticks wired to the GPIO header
+- No shutdown needed: just switch it off (changed disks are written back
+  within a few seconds)
+- A menu (F12) for everything: programs, disks, tapes, cartridges, machine,
+  joysticks, video, keyboard, sound, network
 - Optional Ethernet or Wi-Fi with BMC64's web UI: manage the SD card from a
-  browser (upload, download, edit config files, start programs, reboot)
+  browser and start programs
+
+## ROMs
+
+The CoCo's ROMs are copyrighted by Tandy and Microsoft and are not included.
+Copy your own into the `roms` folder of the SD card: `bas13.rom` and
+`extbas11.rom` for a CoCo 2, `disk11.rom` for disks, `coco3.rom` for a
+CoCo 3. See [docs/ROMS.txt](docs/ROMS.txt).
 
 ## Supported hardware
 
 Raspberry Pi 3 Model B, B+ and A+, and the Raspberry Pi Zero 2 W
 (`kernel8-32.img`), and the Raspberry Pi 2 Model B (`kernel7.img`). The card
 has both kernels and each Pi starts its own. Video and sound go out over
-HDMI; sound can also
-go to the 3.5mm jack.
+HDMI; sound can also go to the 3.5mm jack.
 
 ## Getting started
 
 1. Format an SD card as FAT32.
-2. Copy the contents of a release zip (or of `build/sdcard/` after building) to
-   the root of the card.
-3. Put your Atari files on the card. The `disks`, `programs`, `carts` and
-   `tapes` folders are there for them, but any folder works.
-4. Boot the Pi with a USB keyboard connected. You get the BASIC `READY`
-   prompt. Press **F1** for the menu, then *Run Atari Program* or *Disk
-   Management* to load something.
+2. Copy the contents of a release zip (or of `build/sdcard/` after building)
+   to the root of the card.
+3. Copy your ROMs into `roms`, and your CoCo files to the card. The `disks`,
+   `tapes`, `carts` and `programs` folders are there for them, but any folder
+   works.
+4. Boot the Pi with a USB keyboard connected. You get the `OK` prompt. Press
+   **F12** for the menu, then *Run a Program* to start something.
 
-The display is set to 720p at 50 Hz to suit a PAL Atari, which is the default.
-For an NTSC Atari, see the [User Guide](docs/USER_GUIDE.md#pal-and-ntsc).
-[docs/INSTALLATION.md](docs/INSTALLATION.md) has more on preparing the card,
-ROMs and upgrading.
+The display is set to 720p at 60 Hz to suit an NTSC CoCo. For a PAL CoCo, see
+the [User Guide](docs/USER_GUIDE.md#display-and-timing).
 
 ## Keys
 
-| Key            | Does                                                 |
-|----------------|------------------------------------------------------|
-| F1             | BMA800XL menu, with atari800's menu one item away    |
-| F2 / F3 / F4   | Option / Select / Start                              |
-| F5             | Reset (Shift+F5: power off and on)                   |
-| F6             | Help                                                 |
-| F7, Pause      | Break                                                |
-| F11            | On-screen keyboard                                   |
-| F12            | Turbo on/off                                         |
-| Alt+D, Alt+C, Alt+R, Alt+S, Alt+L | Disks, Cartridge, Run program, Save state, Load state |
-| Numeric keypad | Joystick 1 (8/2/4/6 and diagonals, 0 or 5 to fire)   |
-| ` (backtick) or Windows key | Atari (inverse video) key               |
+| Key                  | Does                                                 |
+|----------------------|------------------------------------------------------|
+| F12                  | Menu                                                 |
+| F11                  | Turbo on/off                                         |
+| F10 / Shift+F10      | Reset / hard reset (power off and on)                |
+| Esc                  | BREAK                                                |
+| Home                 | CLEAR                                                |
+| Arrow keys           | The CoCo's arrow keys                                |
+| Alt, Caps Lock or Windows, F1, F2 | The CoCo 3's ALT, CTRL, F1 and F2       |
 
-Gamepads are joysticks 1 to 4: the D-pad or left stick moves, **A** fires,
-**B** is Space, **Y** is Return, **X** is Option, **Select**/**Start** are the
-Atari's Select/Start. **Home**, or **Select+Start** together, opens the menu,
-where the D-pad moves, **A** chooses and **B** goes back.
+Keys type the characters printed on them (Shift+' types `"`); turn off
+*Typed Characters* in the menu's *Keyboard* page for games that want the
+CoCo's own layout.
+
+Gamepads are Joystick 1 and 2: the left stick or D-pad moves, **A** is the
+fire button, **B** the CoCo 3's second button, **X** types Space and **Y**
+Enter. **Home**, or **Select+Start** together, opens the menu, where the
+D-pad moves, **A** chooses and **B** goes back.
 
 See the [User Guide](docs/USER_GUIDE.md) for all the details, including the
 options in `cmdline.txt` and the GPIO joystick wiring.
@@ -76,33 +83,30 @@ options in `cmdline.txt` and the GPIO joystick wiring.
 ```
 
 builds everything (the kernels for both boards; `./build_sdcard.sh pi3` or
-`pi2` builds one) and stages the SD card files in `build/sdcard/`. See
-[docs/BUILDING.md](docs/BUILDING.md).
-
-## Updating atari800
-
-The atari800 sources are used from a git submodule pinned to a
-release tag. Everything specific to BMA800XL lives in `src/`, so moving to a
-new atari800 release is usually a matter of changing the submodule and
-rebuilding. See [docs/UPDATING.md](docs/UPDATING.md).
+`pi2` builds one) and stages the SD card files in `build/sdcard/`. It works
+on Linux and macOS. See [docs/BUILDING.md](docs/BUILDING.md).
 
 ## How it fits together
 
 ```
-src/main.cpp, kernel.cpp   Circle kernel: USB, GPIO, SD card; runs atari800 on core 1
+src/main.cpp, kernel.cpp   Circle kernel: USB, GPIO, SD card; runs XRoar on core 1
 src/fbl.cpp                Display (dispmanx layer, optional CRT shader), from BMC64
 src/vchiqsound*.cpp        Sound over HDMI or the headphone jack, from BMC64
 src/network.cpp, webui/    Ethernet / Wi-Fi and the web UI, from BMC64
 src/host.h                 What the kernel offers the emulator
-src/port/                  atari800's platform layer (PLATFORM_* functions),
-                           its config.h and the list of atari800 sources
-third_party/atari800       atari800 (submodule)
+src/port/platform.c        XRoar's user interface, video and sound modules; main loop
+src/port/joystick.c        Gamepads and GPIO joysticks as the CoCo's joysticks
+src/port/menu.c, osd.c     The menu, drawn in the CoCo 3's font
+src/port/config.h, xroar.mk  XRoar's build options and source list
+third_party/xroar          XRoar (submodule)
 third_party/circle-stdlib  Circle and newlib (submodule)
 tools/hostsim              Runs the emulator port on a PC for testing
 ```
 
+XRoar is used unmodified: everything specific to BMCoco is in `src/`.
+
 ## Licence
 
-BMA800XL is free software under the GNU General Public License version 3; see
+BMCoco is free software under the GNU General Public License version 3; see
 [LICENSE](LICENSE). It includes software from other projects under their own
 licences; see [docs/THIRD_PARTY.md](docs/THIRD_PARTY.md).

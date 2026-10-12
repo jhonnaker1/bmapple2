@@ -89,13 +89,12 @@ folder_readme() {
     mkdir -p "$STAGING_DIR/$1"
     printf '%s\r\n' "$2" > "$STAGING_DIR/$1/README.txt"
 }
-folder_readme disks    "Disk images: .atr .atx .xfd .dcm .pro"
-folder_readme programs "Programs: .xex .com .exe .obx, and BASIC programs: .bas .lst"
-folder_readme carts    "Cartridge images: .car .rom .bin (and .a52 for the 5200)"
-folder_readme tapes    "Cassette images: .cas"
-folder_readme states   "Saved states: .a8s (Save State in the menu, Alt+S)"
-mkdir -p "$STAGING_DIR/ROM"
-cp "$SRC_DIR/docs/ROM_README.txt" "$STAGING_DIR/ROM/README.txt"
+folder_readme disks    "Disk images: .dsk .vdk .jvc .os9 .dmk (Disk Drives in the menu, F12)"
+folder_readme programs "Machine code programs: .bin .hex .s19 (Run a Program in the menu)"
+folder_readme carts    "Cartridge images: .ccc .rom (Cartridge in the menu)"
+folder_readme tapes    "Cassette images: .cas .c10 .k7 (Cassette in the menu)"
+mkdir -p "$STAGING_DIR/roms"
+cp "$SRC_DIR/docs/ROMS.txt" "$STAGING_DIR/roms/ROMS.txt"
 
 for board in "${BOARDS[@]}"
 do

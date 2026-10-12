@@ -1,7 +1,7 @@
 //
 // main.cpp
 //
-// This file is part of BMA800XL, a bare metal Atari 800XL emulator for the
+// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
 // Raspberry Pi. See LICENSE for licensing details.
 //
 
