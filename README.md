@@ -32,8 +32,10 @@ Copy your own into the `roms` folder of the SD card: `bas13.rom` and
 CoCo 3. See [docs/ROMS.txt](docs/ROMS.txt).
 
 All the CoCo ROMs can be downloaded from the Color Computer Archive:
-https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/ (already named the way
-XRoar, and so BMCoco, looks for them).
+https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/. They are already named
+the way XRoar, and so BMCoco, looks for them: copy the files from both its
+`BASIC_OS` folder (Color BASIC, Extended BASIC, CoCo 3) and its `DOS` folder
+(Disk BASIC) into `roms`.
 
 ## Supported hardware
 
