@@ -37,6 +37,12 @@ own into `roms` (or the root of the card). XRoar finds them by name:
 BMCoco starts the first of these it has ROMs for: CoCo 2 (NTSC), CoCo
 (NTSC), CoCo 3, ... If it has none, it says which files it is missing.
 
+All the CoCo ROMs can be downloaded from the
+[Color Computer Archive](https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/),
+already named this way. Copy the files from both its `BASIC_OS` folder
+(Color BASIC, Extended BASIC, CoCo 3) and its `DOS` folder (Disk BASIC)
+into `roms`.
+
 ## The menu
 
 **F12** (or a gamepad's **Home** button, or **Select+Start**) opens the

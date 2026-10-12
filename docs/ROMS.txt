@@ -17,3 +17,11 @@ ROMs (d32.rom, d64_1.rom, d64_2.rom, ddos12a.rom) work too.
 
 BMCoco starts the first CoCo it has ROMs for: a CoCo 2 (NTSC), then a CoCo 3.
 Choose another in the menu (F12, Machine), or with machine= in cmdline.txt.
+
+All the CoCo ROMs can be downloaded from the Color Computer Archive, already
+named this way:
+
+  https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/
+
+Copy the files from both its BASIC_OS folder (Color BASIC, Extended BASIC,
+CoCo 3) and its DOS folder (Disk BASIC) into this folder.
