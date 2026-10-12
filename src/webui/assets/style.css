@@ -1,37 +1,56 @@
-/* Colours inherited from BMA800XL, after the 1979 Atari 400/800: chocolate
-   keys with cream legends, gold console keys, and the warm striped bands of
-   the period adverts. The old colour names are kept as the JS uses them. */
+/* A Color Computer theme: the VDG's green text screen (dark letters on
+   bright green), its orange alternate screen, and its eight colours (green,
+   yellow, blue, red, buff, cyan, magenta, orange) as a colour bar, on the
+   dark glass of a switched-off TV. The colour names are the ones the page
+   has always used (the JS and HTML refer to them); they no longer describe
+   the colours. */
 :root {
   color-scheme: dark;
-  --bg: #16100c;
-  --bg-2: #1d1510;
-  --panel: #271c15;
-  --panel-2: #33261d;
-  --border: #4a3729;
-  --border-soft: #36281e;
-  --fg: #f2e6cc;
-  --muted: #c4ad8a;
-  --dim: #8c785d;
-  --cream: #efe2c4;
-  --key: #3a2a20;
-  --key-hi: #4c382b;
-  --key-edge: #0d0906;
-  --gold: #e9a93a;
-  --gold-hi: #f6c25a;
-  --gold-lo: #c8862a;
-  --orange: #e57a2c;
-  --rust: #d4512b;
-  --blue: var(--gold);
-  --cyan: #8fbfa6;
-  --purple: var(--orange);
-  --pink: var(--rust);
-  --green: #a7c255;
-  --amber: #f2c14e;
-  --red: #e2483a;
-  --stripe-1: #f4c64a;
-  --stripe-2: #ef9a33;
-  --stripe-3: #e2672b;
-  --stripe-4: #c43b28;
+  --bg: #0a0d0a;
+  --bg-2: #0e130e;
+  --panel: #131a13;
+  --panel-2: #1a231a;
+  --border: #2b3a2b;
+  --border-soft: #1d281d;
+  --fg: #e4ece2;
+  --muted: #a8b8a5;
+  --dim: #6d7f6b;
+  --cream: #eef4ea;
+  --key: #1c251c;
+  --key-hi: #263226;
+  --key-edge: #040604;
+  /* VDG colours, a little softened for a computer screen */
+  --vdg-green: #34e034;
+  --vdg-yellow: #f2ee5a;
+  --vdg-blue: #4b5cff;
+  --vdg-red: #e0393f;
+  --vdg-buff: #f1f1e4;
+  --vdg-cyan: #2fd6a0;
+  --vdg-magenta: #f04ef0;
+  --vdg-orange: #ff7a1c;
+  --vdg-ink: #061806;   /* the VDG's dark green letters */
+  --gold: var(--vdg-green);
+  --gold-hi: #6cf06c;
+  --gold-lo: #1fb41f;
+  --orange: var(--vdg-orange);
+  --rust: #e8601a;
+  --blue: var(--vdg-green);
+  --cyan: var(--vdg-cyan);
+  --purple: var(--vdg-orange);
+  --pink: var(--vdg-magenta);
+  --green: var(--vdg-green);
+  --amber: var(--vdg-yellow);
+  --red: var(--vdg-red);
+  --stripe-1: var(--vdg-green);
+  --stripe-2: var(--vdg-yellow);
+  --stripe-3: var(--vdg-orange);
+  --stripe-4: var(--vdg-red);
+  /* The colour bar: the eight VDG colours in the CoCo's order */
+  --colour-bar: linear-gradient(90deg,
+    var(--vdg-green) 0 12.5%, var(--vdg-yellow) 12.5% 25%,
+    var(--vdg-blue) 25% 37.5%, var(--vdg-red) 37.5% 50%,
+    var(--vdg-buff) 50% 62.5%, var(--vdg-cyan) 62.5% 75%,
+    var(--vdg-magenta) 75% 87.5%, var(--vdg-orange) 87.5% 100%);
   --grad: linear-gradient(180deg, var(--gold-hi), var(--gold-lo));
   --display: "Helvetica Neue", "Arial Black", "Arial Bold", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -46,8 +65,8 @@ body {
   font: 14px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   color: var(--fg);
   background:
-    radial-gradient(1200px 600px at 80% -10%, rgba(233, 169, 58, 0.10), transparent 60%),
-    radial-gradient(900px 500px at -10% 110%, rgba(212, 81, 43, 0.10), transparent 60%),
+    radial-gradient(1200px 600px at 80% -10%, rgba(52, 224, 52, 0.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 110%, rgba(255, 122, 28, 0.06), transparent 60%),
     var(--bg);
 }
 
@@ -118,14 +137,11 @@ a:hover { text-decoration: underline; }
   color: var(--dim);
 }
 
-/* The four stripes of the late-70s adverts, yellow to red. */
+/* The colour bar: the VDG's eight colours. */
 .stripes, .stripes-sm {
-  height: 14px;
-  background: linear-gradient(180deg,
-    var(--stripe-1) 0 2.5px, transparent 2.5px 3.5px,
-    var(--stripe-2) 3.5px 6px, transparent 6px 7px,
-    var(--stripe-3) 7px 9.5px, transparent 9.5px 10.5px,
-    var(--stripe-4) 10.5px 13px, transparent 13px);
+  height: 8px;
+  border-radius: 2px;
+  background: var(--colour-bar);
 }
 .stripes { margin-top: 14px; }
 .stripes-sm { width: 120px; display: inline-block; vertical-align: middle; }
@@ -166,7 +182,7 @@ a:hover { text-decoration: underline; }
 .side-drop[hidden] { display: none; }
 .side-drop.disabled { opacity: 0.4; pointer-events: none; }
 /* files dragged over the file list itself */
-.fb-card.over { outline: 2px dashed var(--gold); outline-offset: -2px; background: rgba(233, 169, 58, 0.06); }
+.fb-card.over { outline: 2px dashed var(--gold); outline-offset: -2px; background: rgba(52, 224, 52, 0.06); }
 
 .sys-head { display: flex; align-items: center; gap: 8px; font-weight: 700; margin-bottom: 8px; }
 .sys-card dl { display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; margin: 0; }
@@ -218,7 +234,7 @@ a:hover { text-decoration: underline; }
 }
 
 .card {
-  background: linear-gradient(180deg, rgba(255, 240, 210, 0.03), transparent 40%), var(--panel);
+  background: linear-gradient(180deg, rgba(210, 255, 210, 0.025), transparent 40%), var(--panel);
   border: 1px solid var(--border);
   border-radius: 14px;
   padding: 16px 18px;
@@ -240,7 +256,7 @@ a:hover { text-decoration: underline; }
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(233, 169, 58, 0.16);
+  background: rgba(52, 224, 52, 0.14);
   color: var(--gold);
   font-size: 14px;
   letter-spacing: 0;
@@ -324,10 +340,11 @@ a:hover { text-decoration: underline; }
   text-wrap: balance;
 }
 .tile-s { font-size: 12px; line-height: 1.3; opacity: 0.8; text-wrap: balance; }
-/* gold like the console keys, the rest in the stripe colours */
-.tile-blue, .tile-purple { --cap: var(--gold); --legend: #2b1c12; }
-.tile-pink { --cap: var(--stripe-3); --legend: #2b1209; }
-.tile-red { --cap: var(--stripe-4); --legend: var(--cream); }
+/* Green like the VDG's text screen, orange like its other one, red for
+   switching off */
+.tile-blue, .tile-purple { --cap: var(--vdg-green); --legend: var(--vdg-ink); }
+.tile-pink { --cap: var(--vdg-orange); --legend: #221004; }
+.tile-red { --cap: var(--vdg-red); --legend: var(--cream); }
 .tile-amber { --cap: var(--key-hi); --legend: var(--cream); }
 /* No empty gap under the tiles until there is a message to show. */
 .qa-card .msg:empty { display: none; }
@@ -373,7 +390,7 @@ a:hover { text-decoration: underline; }
   border-bottom: 1px solid var(--border);
 }
 .fb-table td { padding: 8px 10px; border-bottom: 1px solid var(--border-soft); }
-.fb-table tr:hover td { background: rgba(255, 230, 190, 0.035); }
+.fb-table tr:hover td { background: rgba(200, 255, 200, 0.035); }
 .col-size { text-align: right; white-space: nowrap; }
 .col-mod { white-space: nowrap; color: var(--muted); }
 .fb-table td.col-size { font-variant-numeric: tabular-nums; color: var(--muted); }
@@ -430,7 +447,7 @@ body.modal-open { overflow: hidden; }
   align-items: center;
   justify-content: center;
   padding: 24px;
-  background: rgba(12, 8, 5, 0.75);
+  background: rgba(3, 7, 3, 0.78);
   backdrop-filter: blur(3px);
 }
 .overlay[hidden] { display: none; }
@@ -503,9 +520,9 @@ body.modal-open { overflow: hidden; }
 .ed-foot .ed-msg { flex: 1; margin: 0; min-width: 160px; }
 .ed-btns { display: flex; gap: 8px; margin-left: auto; }
 
-.btn-primary { background: var(--grad); color: #2b1c12; font-weight: 700; }
+.btn-primary { background: var(--grad); color: var(--vdg-ink); font-weight: 700; }
 .btn-primary:hover { border-color: rgba(0, 0, 0, 0.5); filter: brightness(1.08); }
-.btn-reboot { background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 50%), var(--stripe-3); color: #2b1209; font-weight: 700; }
+.btn-reboot { background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 50%), var(--vdg-orange); color: #221004; font-weight: 700; }
 .btn-reboot:hover { border-color: rgba(0, 0, 0, 0.5); filter: brightness(1.08); }
 
 /* ---------- footer ---------- */
@@ -557,31 +574,33 @@ body.modal-open { overflow: hidden; }
 
 /* ---------- name ---------- */
 
-/* BMCoco in heavy, widely spaced capitals with the stripes under it,
-   in the spirit of 1970s adverts. */
+/* BMCoco as the CoCo shows text: dark letters on a green block, with the
+   colour bar under it. */
 .sidebar-name, .welcome-text {
-  font-family: var(--display);
-  font-weight: 900;
+  font-family: var(--mono);
+  font-weight: 800;
   text-transform: uppercase;
-  color: var(--cream);
+  color: var(--vdg-ink);
+  background: var(--vdg-green);
+  display: inline-block;
+  padding: 0.12em 0.4em;
+  border-radius: 3px;
+  box-shadow: 0 0 24px rgba(52, 224, 52, 0.18);
 }
 .sidebar-name {
-  font-size: 21px;
-  letter-spacing: 0.1em;
+  display: block;
+  font-size: 20px;
+  letter-spacing: 0.12em;
   text-align: center;
-  line-height: 1.1;
+  line-height: 1.2;
 }
 .sidebar-name::after {
   content: "";
   display: block;
-  margin: 8px auto 0;
-  width: 100%;
-  height: 14px;
-  background: linear-gradient(180deg,
-    var(--stripe-1) 0 2.5px, transparent 2.5px 3.5px,
-    var(--stripe-2) 3.5px 6px, transparent 6px 7px,
-    var(--stripe-3) 7px 9.5px, transparent 9.5px 10.5px,
-    var(--stripe-4) 10.5px 13px, transparent 13px);
+  margin: 10px -0.4em -0.12em;
+  height: 8px;
+  border-radius: 0 0 3px 3px;
+  background: var(--colour-bar);
 }
 .welcome-text {
   height: auto;
@@ -599,5 +618,5 @@ body.modal-open { overflow: hidden; }
 
 @media (max-width: 820px) {
   .sidebar-name { max-width: none; width: auto; margin: 0 14px 0 2px; font-size: 18px; }
-  .sidebar-name::after { height: 10px; margin-top: 5px; }
+  .sidebar-name::after { height: 6px; margin-top: 6px; }
 }
