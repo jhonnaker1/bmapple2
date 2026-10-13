@@ -1,27 +1,33 @@
-Color Computer ROMs
-===================
+Apple IIgs and Apple IIe ROMs
+=============================
 
-BMCoco needs the ROMs of the machine it emulates. They are copyrighted by
-Tandy and Microsoft, so they are not included: copy your own ROM images
-into this folder. XRoar finds them by file name:
+BMApple2 needs the ROM of the machine it emulates. It is copyrighted by
+Apple, so it is not included: copy your own ROM image into this folder.
 
-  CoCo 1/2 (the default)   bas13.rom      Color BASIC 1.3
-                           extbas11.rom   Extended Color BASIC 1.1
-  Disks (RS-DOS)           disk11.rom     Disk Extended Color BASIC 1.1
-                                          (or disk10.rom)
-  CoCo 3                   coco3.rom      Super Extended Color BASIC
-  MC-10                    mc10.rom
+Apple IIgs (the usual choice)
+  ROM.03         ROM 3, 256K (also found as APPLE2GS.ROM2 or Rom03gd)
+  ROM.01         ROM 01, 128K (also found as APPLE2GS.ROM, xgs.rom or
+                 342-0077-b)
 
-Older versions also work: bas10.rom - bas12.rom, extbas10.rom. Dragon
-ROMs (d32.rom, d64_1.rom, d64_2.rom, ddos12a.rom) work too.
+Apple IIe
+  APPLE2E.ROM    an enhanced IIe ROM in the 32K form other emulators use
+                 (the IIe's 16K ROM in the last 16K, the Disk II card's PROM
+                 at $600)
 
-BMCoco starts the first CoCo it has ROMs for: a CoCo 2 (NTSC), then a CoCo 3.
-Choose another in the menu (F12, Machine), or with machine= in cmdline.txt.
+If there are several, BMApple2 starts the first it finds: ROM 3, then
+ROM 01, then the IIe. Choose another with F4 (KEGS's settings), ROM File
+Selection.
 
-All the CoCo ROMs can be downloaded from the Color Computer Archive, already
-named this way:
+From a MAME ROM set (also Ample's on the Mac)
+---------------------------------------------
+MAME keeps the ROM chips, not ROM files. Copy these files out of the zip
+files into this folder as they are, and BMApple2 makes ROM.03 and
+APPLE2E.ROM from them the first time it starts:
 
-  https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/
+  Apple IIgs ROM 3   apple2gs.zip:    341-0728 and 341-0748
+  Apple IIgs ROM 01  apple2gs.zip:    apple2gsr1/342-0077-b (used as it is)
+  Apple IIe          apple2e.zip:     apple2ee/342-0304-a.e10 and
+                                      apple2ee/342-0303-a.e8
+                     a2diskiing.zip:  341-0027-a.p5 (the Disk II card)
 
-Copy the files from both its BASIC_OS folder (Color BASIC, Extended BASIC,
-CoCo 3) and its DOS folder (Disk BASIC) into this folder.
+Ample keeps its ROM set in ~/Library/Application Support/Ample/roms.

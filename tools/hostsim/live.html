@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>BMCoco Live</title>
+<title>BMApple2 Live</title>
 <style>
   :root {
     --bg: #101010;
@@ -84,26 +84,26 @@
 </style>
 </head>
 <body>
-<h1>BMCOCO <span>live in the host simulator</span></h1>
+<h1>BMAPPLE2 <span>live in the host simulator</span></h1>
 <div id="screen-wrap" tabindex="0">
   <canvas id="screen" width="640" height="240"></canvas>
   <div id="click">Click here to start (keyboard and sound)</div>
 </div>
 <div id="bar">
-  <button data-key="69">Menu (F12)</button>
-  <button data-key="67">Reset (F10)</button>
-  <button data-key="68">Turbo (F11)</button>
-  <button data-key="41">BREAK (Esc)</button>
-  <button data-key="74">CLEAR (Home)</button>
+  <button data-key="67">Menu (F10)</button>
+  <button data-key="61">KEGS Settings (F4)</button>
+  <button data-key="63">Speed (F6)</button>
+  <button data-key="62">Status (F5)</button>
+  <button data-key="41">Esc</button>
   <button id="sound">Sound: off</button>
 </div>
 <div id="status">Connecting...</div>
-<div id="help">Type straight into the screen once it has focus. Arrow keys are the CoCo's arrows; a gamepad works as the right joystick (A fire, X Space, Y Enter, Home menu).</div>
+<div id="help">Type straight into the screen once it has focus. Ctrl+F12 is Reset; F1 and F2 are Open Apple and Option. A gamepad works as the joystick (A and B buttons 0 and 1, X Space, Y Return, Home menu). Mount disks with F4, Disk Configuration.</div>
 
 <script>
 "use strict";
 
-// KeyboardEvent.code to USB HID usage, which BMCoco takes.
+// KeyboardEvent.code to USB HID usage, which BMApple2 takes.
 const USAGE = {
   Enter: 0x28, Escape: 0x29, Backspace: 0x2a, Tab: 0x2b, Space: 0x2c,
   Minus: 0x2d, Equal: 0x2e, BracketLeft: 0x2f, BracketRight: 0x30,

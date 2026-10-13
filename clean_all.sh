@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Cleans everything: the kernel, the compiled XRoar library, the SD card
+# Cleans everything: the kernel, the compiled KEGS library, the SD card
 # staging folder, and the third party builds inside circle-stdlib (which is
 # also reset to its pinned revision, undoing src/patches/).
 #
@@ -12,7 +12,7 @@
 
 if [ ! -f sdcard/config.txt ]
 then
-    echo "Must be run from the BMCoco root directory." >&2
+    echo "Must be run from the BMApple2 root directory." >&2
     exit 1
 fi
 

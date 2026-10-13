@@ -1,8 +1,8 @@
 //
 // options.cpp
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
-// Raspberry Pi. See LICENSE for licensing details.
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
+// the Raspberry Pi. See LICENSE for licensing details.
 //
 
 #include "options.h"
@@ -159,7 +159,7 @@ bool Options::SaveSettings(void) {
   if (f_open(&file, m_SettingsPath, FA_WRITE | FA_CREATE_ALWAYS) != FR_OK) {
     return false;
   }
-  f_puts("# BMCoco settings, written by its menu (F1).\r\n"
+  f_puts("# BMApple2 settings, written by its menu (F10).\r\n"
          "# These win over the same options in cmdline.txt.\r\n", &file);
   for (int i = 0; i < m_nSettings; i++) {
     f_printf(&file, "%s=%s\r\n", m_SettingName[i], m_SettingValue[i]);

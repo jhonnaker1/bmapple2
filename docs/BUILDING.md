@@ -1,6 +1,6 @@
 # Build Instructions
 
-BMCoco builds on Linux (Debian, Ubuntu, WSL) and macOS.
+BMApple2 builds on Linux (Debian, Ubuntu, WSL) and macOS.
 
 ## Prerequisites
 
@@ -25,17 +25,17 @@ uses `wget`; without them, `make_all.sh` and `make_wifi_firmware.sh` use
 stand-ins (the manuals aren't needed, and `curl` does the download).
 
 The Arm GNU Toolchain 15.2.rel1 is downloaded into
-`~/.cache/bmcoco/toolchains` the first time a build needs it
+`~/.cache/bmapple2/toolchains` the first time a build needs it
 (`get_gnu_toolchain.sh`), built for your computer (Linux or macOS):
 `arm-none-eabi` for the 32-bit Pi 2 and Pi 3 kernels, `aarch64-none-elf`
 for the 64-bit Pi 4 kernel. If it can't be downloaded,
-`BMCOCO_ALLOW_ANY_TOOLCHAIN=1` lets the build use whatever
+`BMAPPLE2_ALLOW_ANY_TOOLCHAIN=1` lets the build use whatever
 `arm-none-eabi-gcc` (or `aarch64-none-elf-gcc`) is on the PATH.
 
 ## Downloading the files
 
 ```
-git clone --recursive <BMCoco repository URL>
+git clone --recursive https://github.com/jhonnaker1/bmapple2.git
 ```
 
 or, in an existing clone, `git submodule update --init --recursive`.
@@ -74,7 +74,7 @@ rebooted from there, without touching the SD card.
    `clean_all.sh` or a change to the patches or circle-stdlib. To change
    board, run `clean_all.sh` first (make_all.sh refuses otherwise).
 3. `source get_gnu_toolchain.sh && make` rebuilds just the kernel (for the
-   Pi 4: `BMCOCO_AARCH=64 source get_gnu_toolchain.sh && make`).
+   Pi 4: `BMAPPLE2_AARCH=64 source get_gnu_toolchain.sh && make`).
 4. `./make_wifi_firmware.sh DIR` puts the Wi-Fi firmware in `DIR/firmware`
    (`build_sdcard.sh` does this).
 
@@ -84,21 +84,23 @@ build differs.
 
 ## Testing on a PC
 
-`tools/hostsim` builds the emulator port (XRoar plus `src/port/`) for the
+`tools/hostsim` builds the emulator port (KEGS plus `src/port/`) for the
 PC, with a simulated display, sound and input in place of the Raspberry Pi.
 It runs scripted tests: booting, the display lock and timer pacing, the
-keyboard, analog and digital joysticks, the menu, web UI requests, saved
-settings, and checking the sound stays in step with the display.
+keyboard, gamepads, analog and digital joysticks, the menu, web UI requests
+(starting disk images in the right drive), ROMs made from MAME's chips,
+saved settings, and checking the sound stays in step with the display.
 
 ```
 tools/hostsim/run_tests.sh
-BMCOCO_ROMS=/path/to/your/roms tools/hostsim/run_tests.sh
+BMAPPLE2_ROMS=/path/to/your/roms tools/hostsim/run_tests.sh
 ```
 
-The CoCo's ROMs can't be distributed, so the tests run a small stand-in
-ROM that `tools/hostsim/make_test_rom.py` assembles: it shows the keyboard
-matrix, the joysticks and a frame counter, and makes a sound. With
-`BMCOCO_ROMS` set, Color BASIC and the CoCo 3 are tested too. Screenshots
+Apple's ROMs can't be distributed, so the tests run a small stand-in ROM
+that `tools/hostsim/make_test_rom.py` assembles, which KEGS runs as a IIe:
+it shows whether a key is down, the paddles, the buttons and a frame
+counter, and clicks the speaker. With `BMAPPLE2_ROMS` set to a folder with a
+IIgs ROM (`ROM.03` or `ROM.01`), the IIgs is tested too. Screenshots
 (`.ppm`) are written to `tools/hostsim/out/`.
 
 To play with the port on the PC, run it live:
@@ -110,8 +112,8 @@ tools/hostsim/live.sh /path/to/your/roms
 and open http://127.0.0.1:8064/ in a browser: the screen, keyboard, sound
 and gamepads (through the browser's Gamepad API) are in the page. The
 simulator's SD card is `tools/hostsim/out/live`; disks, tapes and programs
-copied there can be started from the menu. This runs BMCoco's port and
-XRoar on the PC, not the Pi kernel (no emulator shows the Pi's VideoCore
+copied there can be mounted with F4. This runs BMApple2's port and KEGS
+on the PC, not the Pi kernel (no emulator shows the Pi's VideoCore
 display). The web page is served on 127.0.0.1 only.
 
 The simulator can also be driven by a script of key presses and
@@ -149,16 +151,18 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `src/vchiqsound*`            | Sound through the VideoCore (from BMC64)    |
 | `src/options.*`              | `cmdline.txt` options                       |
 | `src/host.h`                 | Interface between kernel and emulator       |
-| `src/port/platform.c`        | XRoar's user interface, video and sound modules; timing; main loop |
-| `src/port/joystick.c`        | Gamepads and GPIO joysticks as the CoCo's joysticks |
+| `src/port/platform.c`        | KEGS's front end: picture, keyboard, mouse, ROMs, web UI requests; timing; main loop |
+| `src/port/snddrv.c`          | KEGS's sound output (for its sound_driver.c) |
+| `src/port/joystick.c`        | Gamepads and GPIO joysticks as the Apple II's joystick (for KEGS's joystick_driver.c) |
+| `src/port/keymap.c`          | USB HID usages to ADB key codes             |
 | `src/port/menu.c`, `osd.c`   | The menu and its on-screen display          |
-| `src/port/posix_extra.c`     | regcomp(), basename(), access() for newlib  |
-| `src/port/becker_stub.c`     | XRoar's Becker port, switched off           |
-| `src/port/config.h`          | XRoar's build configuration                 |
-| `src/port/xroar.mk`          | Which XRoar sources are built               |
+| `src/port/scc_stub.c`        | KEGS's host serial port driver, for a Pi with none |
+| `src/port/posix_extra.c`     | waitpid() for newlib                        |
+| `src/port/compat/`           | Empty stand-ins for headers newlib lacks    |
+| `src/port/kegs.mk`           | Which KEGS sources are built                |
 | `src/patches/`               | Changes applied to Circle by `make_all.sh`  |
 | `sdcard/`                    | Files for the SD card                       |
-| `third_party/xroar`          | XRoar (submodule)                           |
+| `third_party/kegs`           | KEGS (submodule)                            |
 | `third_party/circle-stdlib`  | Circle and newlib (submodule)               |
 | `src/pi4/`                   | Pi 4 display, smooth scaling / CRT shader, HDMI sound |
 | `src/pi4kms/`                | Pi 4 direct display driver                  |

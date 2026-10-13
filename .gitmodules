@@ -2,7 +2,8 @@
 	path = third_party/circle-stdlib
 	url = https://github.com/smuehlst/circle-stdlib
 	ignore = dirty
-[submodule "third_party/xroar"]
-	path = third_party/xroar
-	url = https://www.6809.org.uk/git/xroar.git
+[submodule "third_party/kegs"]
+	path = third_party/kegs
+	url = https://github.com/david-schmidt/KEGS-upstream.git
+	branch = v1.38
 	ignore = dirty

@@ -1,10 +1,10 @@
 #
-# BMCoco - bare metal Tandy Color Computer emulator for the Raspberry Pi 2, 3 and 4
+# BMApple2 - bare metal Apple IIgs and IIe emulator for the Raspberry Pi 2, 3 and 4
 #
 # Raspberry Pi firmware settings. Emulator options are in cmdline.txt.
 #
 
-# BMCoco runs in 32 bit mode on the Pi 2 and 3, and in 64 bit mode on the
+# BMApple2 runs in 32 bit mode on the Pi 2 and 3, and in 64 bit mode on the
 # Pi 4, with a kernel for each board.
 arm_64bit=0
 [pi2]
@@ -22,13 +22,11 @@ kernel=kernel8-rpi4.img
 armstub=armstub8-rpi4.bin
 [all]
 
-# Video: 1280x720 at 60 Hz, the right rate for an NTSC CoCo (the default).
-# For a PAL CoCo or a Dragon use 50 Hz instead: hdmi_mode=19 (here and for
-# HDMI1 below).
+# Video: 1280x720 at 60 Hz, the right rate for the IIgs and IIe (59.92 Hz).
 # The emulator's frames are locked to the display when its refresh rate
-# matches the CoCo's, which gives perfectly smooth scrolling. On the Pi 4
-# and Pi 400 BMCoco sets the display to an NTSC CoCo 1/2's exact rate
-# itself (the CoCo 3 and PAL CoCos stay at 60 or 50 Hz, see docs/PI4.md).
+# is that close, which gives perfectly smooth scrolling. On the Pi 4 and
+# Pi 400 BMApple2 sets the display to the IIgs's exact rate itself (see
+# docs/PI4.md).
 disable_overscan=1
 hdmi_group=1
 hdmi_mode=4

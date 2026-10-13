@@ -1,5 +1,5 @@
 /*
- * live.c - the host simulator's live mode: BMCoco in a web page.
+ * live.c - the host simulator's live mode: BMApple2 in a web page.
  *
  * A small HTTP server on 127.0.0.1, polled from the simulator's main loop
  * (no threads), so the emulator can be seen and played on a PC:
@@ -13,7 +13,7 @@
  *
  * Only for testing on your own computer: it listens on 127.0.0.1 only.
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * This file is part of BMApple2, a bare metal Apple IIgs emulator for the
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 
@@ -64,7 +64,7 @@ int live_init(int port)
 		return 0;
 	}
 	fcntl(listen_fd, F_SETFL, O_NONBLOCK);
-	fprintf(stderr, "[live] BMCoco at http://127.0.0.1:%d/\n", port);
+	fprintf(stderr, "[live] BMApple2 at http://127.0.0.1:%d/\n", port);
 	return 1;
 }
 

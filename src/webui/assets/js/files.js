@@ -15,8 +15,8 @@ let fbPath = "/";
 let fbNames = new Set(); // file names in the current folder (for overwrite checks)
 
 const FILE_ICONS = {
-  d64: "▣", d71: "▣", d81: "▣", d82: "▣", g64: "▣", t64: "▣", tap: "▤",
-  prg: "▶", crt: "▦", sid: "♪", txt: "≣", nfo: "≣", zip: "▤",
+  dsk: "▣", do: "▣", po: "▣", nib: "▣", woz: "▣", "2mg": "▣", "2img": "▣",
+  hdv: "▣", shk: "▤", sdk: "▤", txt: "≣", zip: "▤",
 };
 
 const extOf = (name) => (name.split(".").pop() || "").toLowerCase();
@@ -26,10 +26,9 @@ function isRunnable(name) {
   return canRun(extOf(name));
 }
 
-// Disks, tapes and programs are autostarted, like the menu's Autostart item;
-// a cartridge image is attached (which resets the machine).
-const runVerb = (name) =>
-  extOf(name) === "crt" ? "Attach cartridge" : "Autostart";
+// Disk images are started: put in the drive that boots them, and the
+// machine restarted (emu_autostart_interrupt in src/port/platform.c).
+const runVerb = (name) => "Start";
 
 function fileIcon(name, isDir) {
   if (isDir) return "▸";
@@ -254,7 +253,7 @@ async function editFile(path, name) {
   if (!result.saved) return;
   if (result.rebooting) {
     $("fb-status").className = "msg";
-    $("fb-status").textContent = "Saved " + name + ". BMCoco is rebooting.";
+    $("fb-status").textContent = "Saved " + name + ". BMApple2 is rebooting.";
     return;
   }
   await loadDir(fbPath);

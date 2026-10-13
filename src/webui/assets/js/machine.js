@@ -1,4 +1,4 @@
-// The machine BMCoco is running and what the web UI can do on it, from the
+// The machine BMApple2 is running and what the web UI can do on it, from the
 // "machine" and "caps" of /api/status (webui_machine.cpp on the device).
 
 import * as api from "./api.js";
@@ -25,13 +25,13 @@ export async function loadMachine() {
   }
 }
 
-// Machine name, e.g. "Tandy Color Computer".
+// Machine name, e.g. "Apple IIgs".
 export const machineName = () => current.name;
 
 // Name for display.
 export const machineDisplayName = () => current.name || "machine";
 
-// The emulator's settings file, "/xroar.conf".
+// The emulator's settings file, "/config.kegs".
 export const mainSettingsFile = () => current.settings;
 
 // Whether Autostart accepts files with this extension.

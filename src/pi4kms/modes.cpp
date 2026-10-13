@@ -3,7 +3,7 @@
 //
 // See modes.h.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
@@ -15,7 +15,7 @@ namespace kms {
 
 namespace {
 
-// CTA-861 modes BMCoco switches between: 720p and 1080p, at 60 and
+// CTA-861 modes BMApple2 switches between: 720p and 1080p, at 60 and
 // 50 Hz.
 const Timing Modes[] = {
     {4, 74250000, 1280, 110, 40, 220, 720, 5, 5, 20, true, true},

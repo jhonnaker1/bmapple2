@@ -28,7 +28,7 @@ const fsQuery = (vol, path) =>
 
 // Required by the device on every call that changes the card's config or
 // layout (see webui.cpp); it keeps other sites from triggering them.
-const WEB_HEADER = { "X-BMCoco-Web": "1" };
+const WEB_HEADER = { "X-BMApple2-Web": "1" };
 
 // ---- status ----
 

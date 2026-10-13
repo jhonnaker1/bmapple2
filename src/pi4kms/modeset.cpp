@@ -3,7 +3,7 @@
 //
 // See modeset.h.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
@@ -106,7 +106,7 @@ bool ModeSetter::Current(Timing *timing) {
   const Timing *known = FindMode(h_active, h_total, v_active, v_total);
   if (known == 0) {
     CLogger::Get()->Write(FromModeSet, LogNotice,
-                          "Video mode %ux%u (totals %ux%u) isn't one BMCoco switches",
+                          "Video mode %ux%u (totals %ux%u) isn't one BMApple2 switches",
                           h_active, v_active, h_total, v_total);
     return false;
   }

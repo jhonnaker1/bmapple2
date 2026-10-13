@@ -25,7 +25,7 @@ jobs:
       - name: Cache Arm GNU Toolchain
         uses: actions/cache@v6
         with:
-          path: ~/.cache/bmcoco/toolchains
+          path: ~/.cache/bmapple2/toolchains
           key: arm-gnu-toolchain-15.2.rel1-arm-none-eabi-aarch64-none-elf
 
       - name: Test the emulator port on the PC
@@ -42,5 +42,5 @@ jobs:
       - name: Upload SD card files
         uses: actions/upload-artifact@v7
         with:
-          name: bmcoco-sdcard
+          name: bmapple2-sdcard
           path: build/sdcard/

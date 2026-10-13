@@ -1,12 +1,12 @@
 /*
  * live.h - the host simulator's live mode (see live.c).
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * This file is part of BMApple2, a bare metal Apple IIgs emulator for the
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 
-#ifndef BMCOCO_LIVE_H_
-#define BMCOCO_LIVE_H_
+#ifndef BMAPPLE2_LIVE_H_
+#define BMAPPLE2_LIVE_H_
 
 #include <stdint.h>
 

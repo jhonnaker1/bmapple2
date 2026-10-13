@@ -1,61 +1,49 @@
-# Updating XRoar and Circle
+# Updating KEGS and Circle
 
-## XRoar
+## KEGS
 
-XRoar is a git submodule in `third_party/xroar`, from
-`https://www.6809.org.uk/git/xroar.git`, pinned to a release tag. It is used
-unmodified; everything specific to BMCoco is in `src/port/`:
+KEGS is a git submodule in `third_party/kegs`, from
+`https://github.com/david-schmidt/KEGS-upstream.git`, which keeps each
+release from [KEGS's SourceForge page](https://kegs.sourceforge.net/) on a
+branch of its own (`v1.38`). It is used unmodified; everything specific to
+BMApple2 is in `src/port/`:
 
-| File | What it holds |
-| --- | --- |
-| `src/port/xroar.mk` | The list of XRoar source files to compile |
-| `src/port/config.h` | XRoar's build options (normally made by configure) |
-| `src/port/platform.c` | The user interface, video and sound modules |
-| `src/port/joystick.c` | The joystick module ("physical" joysticks) |
-| `src/port/menu.c` | The menu, which talks to XRoar through its UI messages |
-| `src/port/becker_stub.c`, `posix_extra.c` | Stand-ins for what doesn't build on newlib |
+| File | What it has to do with KEGS |
+|---|---|
+| `src/port/kegs.mk` | The list of KEGS source files to compile (from KEGS's `src/ldvars`) |
+| `src/port/platform.c` | KEGS's front end, in place of `xdriver.c` / `windriver.c` / the Mac's: `kegs_init()`, `run_16ms()`, `video_out_data()`, the key, mouse and colour mask calls, `get_dtime()` and `micro_sleep()` |
+| `src/port/snddrv.c` | In place of `sound_driver.c`: `snddrv_init()`, `snddrv_send_sound()` |
+| `src/port/joystick.c` | In place of `joystick_driver.c`: `joystick_init()`, `joystick_update()`, `joystick_update_buttons()` |
+| `src/port/scc_stub.c` | In place of `scc_unixdriver.c` on the Pi |
+| `src/port/keymap.c` | USB keys to the ADB codes KEGS takes |
+| `src/port/osd.c` | Draws the menu with KEGS's font (`g_font_array`) |
+| `src/port/compat/` | Empty `sys/ioctl.h`, `sys/ipc.h`, `sys/shm.h` for newlib |
 
-To move to a new release:
+To move to a new KEGS release:
 
-1. Check out the new tag in the submodule:
+1. Fetch the new release's branch and check it out:
 
    ```
-   cd third_party/xroar
-   git fetch --tags
-   git checkout 1.13           # the new release tag
+   cd third_party/kegs
+   git fetch origin
+   git checkout v1.39
    cd ../..
    ```
 
-2. Compare the build files between the two tags:
+2. Compare the new `src/ldvars` (OBJECTS) with `src/port/kegs.mk`, and
+   add or remove files. Compare the front end functions KEGS's own drivers
+   call (`xdriver.c` is the simplest) with `src/port/platform.c`: new calls
+   at start up, renamed functions, new settings.
+3. Build and test on the PC first: `tools/hostsim/run_tests.sh`, with
+   `BMAPPLE2_ROMS` set to a folder with a IIgs ROM, and boot a GS/OS disk
+   in the live simulator (`tools/hostsim/live.sh`). Then build the kernels
+   (`./build_sdcard.sh`) and try them on a Pi.
+4. Update the version in `docs/THIRD_PARTY.md` and the branch in
+   `.gitmodules`, and commit:
 
    ```
-   cd third_party/xroar
-   git diff 1.12.1 1.13 --stat -- src/Makefile.am portalib/Makefile.am configure.ac
-   ```
-
-   - Sources added to or removed from `xroar_SOURCES` (or the machine,
-     cartridge and part sections BMCoco enables) go in `src/port/xroar.mk`.
-     Front ends for other systems (`sdl2/`, `gtk3/`, `x11/`, `alsa/` and so
-     on) are not needed.
-   - New `AC_DEFINE`s in `configure.ac` may need a line in
-     `src/port/config.h`. Never run configure inside `third_party/xroar`:
-     the generated `config.h` would be used instead of BMCoco's (the
-     Makefile stops if it finds one).
-   - Changes to `ui.h`, `vo.h`, `ao.h`, `sound.h`, `joystick.h` or `hkbd.h`
-     may need the same in `src/port/`.
-
-3. Build and test on the PC, then for the Pi:
-
-   ```
-   tools/hostsim/run_tests.sh
-   ./build_sdcard.sh
-   ```
-
-4. Commit the submodule and any port changes together:
-
-   ```
-   git add third_party/xroar src/port
-   git commit -m "Update XRoar to 1.13"
+   git add third_party/kegs src/port .gitmodules docs/THIRD_PARTY.md
+   git commit -m "Update KEGS to 1.39"
    ```
 
 ## circle-stdlib (Circle and newlib)

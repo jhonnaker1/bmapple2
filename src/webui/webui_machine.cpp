@@ -23,15 +23,15 @@
 
 namespace {
 
-// What XRoar can start directly (xroar_load_file_by_type): disk images,
-// tapes, cartridges and machine code programs.
+// The disk images KEGS can boot (emu_autostart_interrupt() in
+// src/port/platform.c puts them in a drive and restarts): 5.25" (DOS 3.3
+// and ProDOS order, nibbles, WOZ), 3.5" and hard disks.
 const char *const kRunTypes[] = {
-    "dsk", "vdk", "jvc", "os9", "dmk", "cas", "c10", "k7", "ccc", "rom",
-    "bin", "hex", "s19", 0,
+    "dsk", "do", "po", "nib", "woz", "2mg", "2img", "hdv", 0,
 };
 
 const WebUiMachine kMachine = {
-    "Tandy Color Computer", "/xroar.conf", kRunTypes, "",
+    "Apple IIgs", "/config.kegs", kRunTypes, "",
 };
 
 char Lower(char c) {

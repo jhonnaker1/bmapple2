@@ -1,63 +1,46 @@
 /*
- * platform.c - XRoar platform layer for BMCoco.
+ * platform.c - KEGS platform layer for BMApple2.
  *
- * XRoar is built from modules: a user interface module supplies the video
- * output, and can supply sound output, joysticks and file requesters. This
- * file is BMCoco's user interface module ("bmcoco"), with its video and
- * sound modules, on top of the Circle kernel services in src/host.h. It also
- * runs the emulator's main loop. Joysticks are in joystick.c, the menu in
- * menu.c and osd.c.
+ * Does what KEGS's front ends (xdriver.c, windriver.c, macdriver) do, on
+ * top of the Circle kernel services in src/host.h: starts KEGS, runs its
+ * main loop a frame (run_16ms()) at a time, copies its picture to the
+ * display, and passes on keys, the mouse and the joysticks. Sound is in
+ * snddrv.c, the joysticks in joystick.c, the menu in menu.c and osd.c.
  *
- * Keyboard: XRoar's own host keyboard code takes USB HID usage codes, which
- * is what the kernel reports, so keys are passed straight to it; XRoar maps
- * them to the CoCo's matrix (or, with "typed characters" on, translates the
- * characters typed using the layout set by keyboard= in cmdline.txt).
+ * Picture: KEGS draws 32-bit pixels (0xRRGGBB, as its Windows front end
+ * asks for them with video_set_*_mask(); KEGS works its colours out for
+ * 8-bit fields) and reports the rectangles that changed each frame
+ * (video_out_data()); only those are copied, converted to RGB565.
  *
- * Timing: when the display refreshes at (close to) the emulated machine's
- * frame rate, every frame is shown on its own display refresh and the
- * emulator waits for vertical blank: scrolling is then perfectly smooth.
- * Otherwise the emulation is paced by a timer. Either way the sound is kept
- * in step by dropping or repeating a sample now and then.
+ * Timing: KEGS paces itself to the IIgs's 59.92 Hz with get_dtime() and
+ * micro_sleep() (clock.c). Here those are BMApple2's: when the display
+ * refreshes at (close to) that rate, each frame is shown on its own display
+ * refresh and KEGS's sleep is skipped, so scrolling is perfectly smooth;
+ * otherwise KEGS's sleep does the pacing.
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 
-#include "top-config.h"
+#include "defc.h"
 
 #include <math.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <strings.h>
 #include <unistd.h>
 
-#include "sds.h"
-#include "xalloc.h"
-
-#include "ao.h"
-#include "events.h"
-#include "hkbd.h"
-#include "joystick.h"
-#include "logging.h"
-#include "machine.h"
-#include "module.h"
-#include "part.h"
-#include "romlist.h"
-#include "sound.h"
-#include "ui.h"
-#include "vdisk.h"
-#include "vdrive.h"
-#include "vo.h"
-#include "vo_render.h"
-#include "xroar.h"
-
 #include "../host.h"
-#include "bmcoco.h"
+#include "bmapple2.h"
 #include "osd.h"
+
+/* KEGS (protos.h declares them; the names are KEGS's). */
+extern int g_audio_enable;
+extern int g_limit_speed;
+extern int g_joystick_type;
+extern const char g_kegs_version_str[];
 
 /* ---- Settings ---------------------------------------------------------------- */
 
-const char *bmcoco_sd_root(void)
+const char *bmapple2_sd_root(void)
 {
 	return host_option("root", "/");
 }
@@ -73,51 +56,48 @@ static int option_on(const char *name, int default_value)
 
 /* ---- Video ------------------------------------------------------------------- */
 
-/* The frame buffer is big enough for XRoar's largest picture ("underscan"). */
-#define FB_W 736
-#define FB_H 288
+/* KEGS's window: the 640x400 Apple area and its borders, 704 x 462. KEGS's
+   picture is taller: its status lines (F5) are below that, up to
+   kegs_height lines, and video_out_data() writes them too. */
+#define FB_W X_A2_WINDOW_WIDTH
+#define FB_H X_A2_WINDOW_HEIGHT
 
 static uint16_t *fb_pixels;
 static int fb_pitch_px;
+static word32 *kegs_pixels;     /* what video_out_data() writes */
+static int kegs_height;         /* its height (FB_W wide) */
+static Kimage *main_kimage;
+static int osd_view;
 
-static struct vo_interface *bm_vo;
-static int vp_w = 640, vp_h = 240;  /* XRoar's viewport */
-static int vp_60hz;                  /* XRoar's 60 Hz scaling is on */
-static int osd_view;                 /* the menu is showing */
-
-static double refresh_rate = 60.0;   /* measured display refresh, Hz */
-static double machine_rate = 0.0;    /* emulated frame rate, Hz */
+static double refresh_rate = 60.0;
 static int vsync_lock;
-static int turbo;
 
-/* Frame rate tracking: emulated time between vertical syncs. */
-static event_ticks last_vsync_tick;
-static int have_vsync_tick;
-
-uint16_t *bmcoco_framebuffer(int *pitch_px)
+uint16_t *bmapple2_framebuffer(int *pitch_px)
 {
 	*pitch_px = fb_pitch_px;
 	return fb_pixels;
 }
 
-static int shown_height(void)
-{
-	return vp_60hz ? (vp_h * 5) / 6 : vp_h;
-}
+/* KEGS's 640x400 Apple area filled a 4:3 monitor, so its pixels are 5/6
+   as wide as they are high; aspect= in cmdline.txt multiplies that. */
+#define PIXEL_ASPECT (5.0 / 6.0)
 
 static void apply_view(void)
 {
-	double aspect = (4.0 / 3.0) * host_option_double("aspect", 1.0);
+	double aspect = (double) FB_W / FB_H * PIXEL_ASPECT
+	                * host_option_double("aspect", 1.0);
 	if (osd_view)
-		host_video_set_view(0, 0, 640, 240, 4.0 / 3.0);
+		host_video_set_view(0, 0, 640, 460, 640.0 / 460.0);
 	else
-		host_video_set_view(0, 0, vp_w, shown_height(), aspect);
+		host_video_set_view(0, 0, FB_W, FB_H, aspect);
 }
 
-void bmcoco_osd_view(int on)
+void bmapple2_osd_view(int on)
 {
 	osd_view = on;
 	apply_view();
+	if (!on && main_kimage != NULL)
+		video_set_x_refresh_needed(main_kimage, 1);
 }
 
 static void clear_framebuffer(void)
@@ -127,7 +107,6 @@ static void clear_framebuffer(void)
 		memset(fb_pixels + y * fb_pitch_px, 0, FB_W * 2);
 }
 
-/* Times a few vertical blanks to find the display's refresh rate. */
 static void measure_refresh_rate(void)
 {
 	enum { SKIP = 3, COUNT = 20 };
@@ -141,507 +120,210 @@ static void measure_refresh_rate(void)
 	rate = COUNT / (host_time() - start);
 	if (rate > 20.0 && rate < 250.0)
 		refresh_rate = rate;
-	LOG_PRINT("BMCoco: display refresh rate %.3f Hz\n", refresh_rate);
+	printf("BMApple2: display refresh rate %.3f Hz\n", refresh_rate);
 }
-
-/* The first decision is logged, and every change after it. */
-static int sync_decided;
 
 static void update_sync_mode(void)
 {
 	const char *mode = host_option("vsync", "auto");
-	int lock;
 	if (strcmp(mode, "off") == 0 || strcmp(mode, "0") == 0)
-		lock = FALSE;
+		vsync_lock = FALSE;
 	else if (strcmp(mode, "on") == 0 || strcmp(mode, "1") == 0)
-		lock = TRUE;
+		vsync_lock = TRUE;
 	else {
-		/* A 60 Hz display for an NTSC CoCo, 50 Hz for a PAL one;
-		   anything else would run it noticeably fast or slow. */
-		double ratio = machine_rate > 0.0 ? refresh_rate / machine_rate : 0.0;
-		lock = ratio > 0.98 && ratio < 1.02;
+		/* The IIgs runs at 59.92 Hz: a 60 Hz display is right for it. */
+		double ratio = refresh_rate / VBL_RATE;
+		vsync_lock = ratio > 0.98 && ratio < 1.02;
 	}
-	if (lock != vsync_lock || !sync_decided) {
-		sync_decided = TRUE;
-		LOG_PRINT("BMCoco: display %.2f Hz, machine %.2f Hz, %s\n", refresh_rate,
-		          machine_rate, lock ? "synchronised to the display" : "timer paced");
-	}
-	vsync_lock = lock;
+	printf("BMApple2: display %.2f Hz, IIgs %.2f Hz, %s\n", refresh_rate, VBL_RATE,
+	       vsync_lock ? "synchronised to the display" : "timer paced");
 }
 
-/* Called at the emulated machine's vertical sync. */
-static void track_machine_rate(void)
-{
-	event_ticks now = event_current_tick;
-	if (have_vsync_tick) {
-		event_ticks delta = now - last_vsync_tick;
-		if (delta > 0) {
-			double rate = (double) EVENT_TICK_RATE / (double) delta;
-			/* Ignore odd frames (the VDG resyncing, mode changes). */
-			if (rate > 45.0 && rate < 65.0) {
-				int was_ntsc = machine_rate > 55.0;
-				if (machine_rate == 0.0 || (rate > 55.0) != was_ntsc)
-					machine_rate = rate;
-				else
-					machine_rate += (rate - machine_rate) * 0.01;
-				if (machine_rate == rate) {
-					/* A new machine, or NTSC/PAL changed: where the
-					   host can set the video mode (the Pi 4), run the
-					   display at the machine's rate, then time it. */
-					if (host_display_match_rate(rate))
-						measure_refresh_rate();
-					update_sync_mode();
-				}
-			}
-		}
-	}
-	last_vsync_tick = now;
-	have_vsync_tick = TRUE;
-}
-
-static double last_present;
-
-static void bm_draw(void *sptr)
-{
-	double now;
-	(void) sptr;
-	if (osd_view)
-		return;
-	track_machine_rate();
-	osd_draw_notification(fb_pixels, fb_pitch_px, vp_w, shown_height());
-	now = host_time();
-	if (turbo) {
-		/* Show a frame now and then; the rest of the time emulate. */
-		if (now - last_present < 0.04) {
-			host_yield();
-			return;
-		}
-		host_video_present(FALSE);
-	} else {
-		host_video_present(vsync_lock);
-	}
-	last_present = now;
-}
-
-static void bm_set_viewport(void *sptr, int w, int h)
-{
-	(void) sptr;
-	if (w < 64)
-		w = 64;
-	if (w > FB_W)
-		w = FB_W;
-	if (h < 48)
-		h = 48;
-	if (h > FB_H)
-		h = FB_H;
-	vp_w = w;
-	vp_h = h;
-	vo_render_set_viewport(bm_vo->renderer, vp_w, shown_height());
-	bm_vo->renderer->buffer_pitch = fb_pitch_px;
-	clear_framebuffer();
-	apply_view();
-}
-
-static void bm_notify_frame_rate(void *sptr, bool is_60hz)
-{
-	(void) sptr;
-	vp_60hz = is_60hz;
-	bm_set_viewport(NULL, vp_w, vp_h);
-}
-
-static void bm_vo_free(void *sptr)
-{
-	struct vo_interface *vo = sptr;
-	vo_render_free(vo->renderer);
-	free(vo);
-}
-
-static struct vo_interface *bm_vo_new(void)
-{
-	struct vo_interface *vo = vo_interface_new(sizeof(*vo));
-	struct vo_render *vr;
-
-	vo_interface_init(vo);
-	vr = vo_render_new(VO_RENDER_FMT_RGB565);
-	vo_set_renderer(vo, vr);
-	vo_render_set_buffer(vr, fb_pixels);
-	vr->buffer_pitch = fb_pitch_px;
-	vr->notify_frame_rate = DELEGATE_AS1(void, bool, bm_notify_frame_rate, vo);
-
-	vo->free = DELEGATE_AS0(void, bm_vo_free, vo);
-	vo->set_viewport = DELEGATE_AS2(void, int, int, bm_set_viewport, vo);
-	vo->draw = DELEGATE_AS0(void, bm_draw, vo);
-	/* The whole display: XRoar's picture area is the 4:3 part of it. */
-	vo_set_draw_area(vo, 0, 0, 640, 480);
-	bm_vo = vo;
-	bm_set_viewport(NULL, vp_w, vp_h);
-	return vo;
-}
-
-double bmcoco_refresh_rate(void)
+double bmapple2_refresh_rate(void)
 {
 	return refresh_rate;
 }
 
-double bmcoco_machine_rate(void)
-{
-	return machine_rate;
-}
-
-int bmcoco_vsync_locked(void)
+int bmapple2_vsync_locked(void)
 {
 	return vsync_lock;
 }
 
-void bmcoco_video_settings_changed(void)
+void bmapple2_video_settings_changed(void)
 {
 	update_sync_mode();
 	apply_view();
 }
 
-int bmcoco_turbo(void)
+/* The changed parts of KEGS's picture into the frame buffer. */
+static void copy_picture(void)
 {
-	return turbo;
-}
-
-/* ---- Sound ------------------------------------------------------------------- */
-
-#define AO_RATE 44100
-#define AO_FRAGMENT 512
-
-static int16_t ao_fragment[AO_FRAGMENT];
-static unsigned ao_rate;          /* 0 if there's no sound */
-static unsigned ao_latency;       /* frames */
-static int ao_corrections;
-static const int16_t silence[1024];
-
-static void open_sound(void)
-{
-	unsigned ms = (unsigned) host_option_int("audio_buffer_ms", 60);
-	if (ms < 20)
-		ms = 20;
-	if (ms > 500)
-		ms = 500;
-	ao_latency = AO_RATE * ms / 1000;
-	ao_rate = host_sound_open(AO_RATE, 1, ao_latency);
-	if (ao_rate == 0)
-		LOG_WARN("BMCoco: no sound\n");
-}
-
-void bmcoco_sound_settings_changed(void)
-{
-	open_sound();
-}
-
-/* Keeps the sound output fed while the emulation isn't running. */
-static void feed_silence(void)
-{
-	unsigned frames;
-	if (ao_rate == 0)
-		return;
-	frames = host_sound_free_frames();
-	/* Keep it about half full, ready for when the emulation goes on. */
-	if (frames > ao_latency / 2) {
-		frames -= ao_latency / 2;
-		while (frames > 0) {
-			unsigned n = frames > 1024 ? 1024 : frames;
-			host_sound_write(silence, n);
-			frames -= n;
-		}
-	}
-}
-
-/* A fragment from XRoar. The emulation runs at the display's pace or a
-   timer's, never quite the sound output's, so the buffer is kept about half
-   full by dropping or repeating a sample when it strays. One sample in 512
-   is far below what can be heard, and more than covers the 0.1% between an
-   NTSC CoCo and a 60 Hz display. */
-static void play_fragment(const int16_t *samples, unsigned n)
-{
-	static int16_t buf[AO_FRAGMENT + 1];
-	unsigned free_frames, used;
-	if (ao_rate == 0)
-		return;
-	free_frames = host_sound_free_frames();
-	used = free_frames < ao_latency ? ao_latency - free_frames : 0;
-
-	if (turbo) {
-		/* Far too much sound: play what fits. */
-		if (n > free_frames)
-			n = free_frames;
-		if (n > 0)
-			host_sound_write(samples, n);
-		return;
-	}
-	if (used < ao_latency / 4 && n < AO_FRAGMENT + 1) {
-		/* Running dry: one sample more. */
-		memcpy(buf, samples, n * sizeof(*samples));
-		buf[n] = samples[n - 1];
-		samples = buf;
-		n++;
-		ao_corrections++;
-	} else if (used > (ao_latency * 3) / 4 && n > 1) {
-		/* Getting full: one sample less. */
-		n--;
-		ao_corrections--;
-	}
-	if (n > free_frames) {
-		/* No room at all (the emulation got far ahead): drop it. */
-		n = free_frames;
-	}
-	if (n > 0)
-		host_sound_write(samples, n);
-}
-
-static void *ao_write_buffer(void *sptr, void *buffer)
-{
-	(void) sptr;
-	if (buffer != NULL)
-		play_fragment(buffer, AO_FRAGMENT);
-	return ao_fragment;
-}
-
-static void *ao_write_silence(void *sptr, void *buffer)
-{
-	(void) sptr;
-	feed_silence();
-	return buffer;
-}
-
-static void ao_free(void *sptr)
-{
-	struct ao_interface *ao = sptr;
-	sound_interface_free(ao->sound_interface);
-	free(ao);
-}
-
-static void *ao_new(void *cfg)
-{
-	struct ao_interface *ao = xmalloc(sizeof(*ao));
-	(void) cfg;
-	*ao = (struct ao_interface){0};
-	ao->free = DELEGATE_AS0(void, ao_free, ao);
-	ao->sound_interface = sound_interface_new(NULL, SOUND_FMT_S16_HE, AO_RATE, 1, AO_FRAGMENT);
-	if (ao->sound_interface == NULL) {
-		free(ao);
-		return NULL;
-	}
-	ao->sound_interface->write_buffer = DELEGATE_AS1(voidp, voidp, ao_write_buffer, ao);
-	ao->sound_interface->write_silence = DELEGATE_AS1(voidp, voidp, ao_write_silence, ao);
-	return ao;
-}
-
-static struct module ao_bmcoco_module = {
-	.name = "bmcoco", .description = "BMCoco sound (HDMI or headphones)",
-	.new = ao_new,
-};
-
-static struct module * const bmcoco_ao_module_list[] = {
-	&ao_bmcoco_module, NULL
-};
-
-/* ---- The user interface module -------------------------------------------- */
-
-extern struct module filereq_null_module;
-
-static struct module * const bmcoco_filereq_module_list[] = {
-	&filereq_null_module, NULL
-};
-
-static struct joystick_module * const bmcoco_js_module_list[] = {
-	&bmcoco_js_mod, NULL
-};
-
-static void ui_free(void *sptr)
-{
-	free(sptr);
-}
-
-static void *ui_new(void *cfg)
-{
-	struct ui_interface *ui = xmalloc(sizeof(*ui));
-	(void) cfg;
-	*ui = (struct ui_interface){0};
-	ui->free = DELEGATE_AS0(void, ui_free, ui);
-	ui->vo_interface = bm_vo_new();
-	/* XRoar's host keyboard tables (each front end sets them up). */
-	hk_init();
-	bmcoco_menu_attach();
-	return ui;
-}
-
-static struct ui_module ui_bmcoco_module = {
-	.common = { .name = "bmcoco", .description = "BMCoco", .new = ui_new },
-	.filereq_module_list = bmcoco_filereq_module_list,
-	.ao_module_list = bmcoco_ao_module_list,
-	.joystick_module_list = bmcoco_js_module_list,
-};
-
-static struct ui_module * const bmcoco_ui_module_list[] = {
-	&ui_bmcoco_module, NULL
-};
-
-/* ---- Machines and ROMs ------------------------------------------------------- */
-
-static int machine_works(struct machine_config *mc)
-{
-	const struct partdb_entry *pe;
-	const struct machine_partdb_entry *mpe;
-	if (mc == NULL)
-		return FALSE;
-	pe = partdb_find_entry(mc->architecture);
-	if (pe == NULL || !partdb_ent_is_a(pe, "machine"))
-		return FALSE;
-	mpe = (const struct machine_partdb_entry *) pe;
-	return mpe->is_working_config != NULL && mpe->is_working_config(mc);
-}
-
-/* Adds "name" to LIST if the ROM isn't found. */
-static void check_rom(char *list, size_t size, const char *rom)
-{
-	sds path;
-	if (rom == NULL)
-		return;
-	path = romlist_find(rom);
-	if (path != NULL) {
-		sdsfree(path);
-		return;
-	}
-	/* "@coco" is a list of names: the first is the usual one. */
-	if (rom[0] == '@') {
-		static const struct { const char *list; const char *file; } usual[] = {
-			{"@coco", "bas13.rom"}, {"@coco_ext", "extbas11.rom"},
-			{"@coco1", "bas10.rom"}, {"@coco1e", "bas11.rom"},
-			{"@coco1e_ext", "extbas10.rom"}, {"@coco2", "bas12.rom"},
-			{"@coco2_ext", "extbas11.rom"}, {"@coco2b", "bas13.rom"},
-			{"@coco3", "coco3.rom"}, {"@coco3p", "coco3p.rom"},
-			{"@mc10", "mc10.rom"}, {"@dragon32", "d32.rom"},
-			{"@dragon64", "d64_1.rom"}, {"@dragon64_alt", "d64_2.rom"},
-			{"@deluxecoco", "deluxe.rom"},
-		};
-		unsigned i;
-		for (i = 0; i < sizeof(usual) / sizeof(usual[0]); i++) {
-			if (strcmp(rom, usual[i].list) == 0) {
-				rom = usual[i].file;
-				break;
+	Change_rect rect;
+	int i;
+	for (i = 0; i < MAX_CHANGE_RECTS; i++) {
+		int x, y;
+		if (!video_out_data(kegs_pixels, main_kimage, FB_W, &rect, i))
+			break;
+		if (rect.y + rect.height > kegs_height || rect.x + rect.width > FB_W)
+			continue;  /* never written: video_out_data() checks the same */
+		for (y = rect.y; y < rect.y + rect.height && y < FB_H; y++) {
+			const word32 *src = kegs_pixels + (size_t) y * FB_W;
+			uint16_t *dst = fb_pixels + (size_t) y * fb_pitch_px;
+			for (x = rect.x; x < rect.x + rect.width && x < FB_W; x++) {
+				word32 p = src[x];
+				dst[x] = (uint16_t) (((p >> 8) & 0xf800) | ((p >> 5) & 0x07e0)
+				                     | ((p >> 3) & 0x001f));
 			}
 		}
 	}
-	if (strstr(list, rom) != NULL)
-		return;
-	if (list[0] != '\0')
-		strncat(list, ", ", size - strlen(list) - 1);
-	strncat(list, rom[0] == '@' ? rom + 1 : rom, size - strlen(list) - 1);
 }
 
-const char *bmcoco_missing_roms(void)
+/* ---- Timing (clock.c's, renamed when it is compiled: see kegs.mk) -------- */
+
+double get_dtime(void)
 {
-	static char missing[128];
-	struct machine_config *mc = xroar.machine_config;
-	missing[0] = '\0';
-	if (mc == NULL || machine_works(mc))
-		return NULL;
-	check_rom(missing, sizeof(missing), mc->bas_rom);
-	check_rom(missing, sizeof(missing), mc->extbas_rom);
-	check_rom(missing, sizeof(missing), mc->altbas_rom);
-	return missing[0] != '\0' ? missing : "the machine's ROMs";
+	return host_time();
 }
 
-/* Without machine= in cmdline.txt, start the first CoCo there are ROMs for
-   (XRoar on its own would prefer a Dragon). */
-static void choose_machine(void)
+int micro_sleep(double dtime)
 {
-	static const char *const preferred[] = {
-		"coco2bus", "cocous", "coco3", "coco2b", "coco", "coco3p",
-		"deluxecoco", "mc10", "dragon64", "dragon32", NULL
-	};
-	int i;
-	if (host_option("machine", NULL) != NULL)
-		return;
-	for (i = 0; preferred[i] != NULL; i++) {
-		struct machine_config *mc = machine_config_by_name(preferred[i]);
-		if (mc != NULL && machine_works(mc)) {
-			if (mc != xroar.machine_config)
-				ui_update_state(-1, ui_tag_machine, mc->id, NULL);
-			return;
-		}
-	}
-	/* None: stay with a CoCo 2, which tells what it's missing. */
-	{
-		struct machine_config *mc = machine_config_by_name("coco2bus");
-		if (mc != NULL && mc != xroar.machine_config)
-			ui_update_state(-1, ui_tag_machine, mc->id, NULL);
-	}
+	if (dtime <= 0.0)
+		return 0;
+	/* With the display doing the pacing, waiting for the next refresh
+	   is the sleep. */
+	if (vsync_lock && !osd_view)
+		return 0;
+	if (dtime > 0.25)
+		dtime = 0.25;
+	host_sleep_us((unsigned) (dtime * 1000000.0));
+	return 0;
 }
 
 /* ---- Files ---------------------------------------------------------------- */
 
-/* XRoar writes disk images back only when they're ejected, and the SD
-   card's file system caches what it can. Since the Pi can be switched off
-   at any time, write changed disks once they have been left alone for two
-   seconds, and push everything out to the card. */
-static double disk_dirty_since;
-
-static int disks_dirty(void)
-{
-	unsigned drive;
-	if (xroar.vdrive_interface == NULL)
-		return FALSE;
-	for (drive = 0; drive < 4; drive++) {
-		struct vdisk *disk = vdrive_disk_in_drive(xroar.vdrive_interface, drive);
-		if (disk != NULL && disk->dirty && disk->write_back)
-			return TRUE;
-	}
-	return FALSE;
-}
-
-static void sync_files(int force)
+/* KEGS writes to disk images as the IIgs writes to its disks, with nothing
+   kept back to write later, but the SD card's file system caches what it can.
+   Since the Pi can be switched off at any time, push everything out to the
+   card once a second. */
+static void sync_files(void)
 {
 	int fd;
-	if (disks_dirty()) {
-		double now = host_time();
-		if (disk_dirty_since == 0.0)
-			disk_dirty_since = now;
-		if (force || now - disk_dirty_since >= 2.0) {
-			vdrive_flush(xroar.vdrive_interface);
-			disk_dirty_since = 0.0;
-		}
-	} else {
-		disk_dirty_since = 0.0;
-	}
 	fflush(NULL);
-	for (fd = 3; fd < 20; fd++)
+	for (fd = 3; fd < 30; fd++)
 		fsync(fd);
+}
+
+/* ---- Starting ----------------------------------------------------------- */
+
+/* KEGS stops if config.kegs isn't there (it only writes one it has read),
+   so a new card gets an empty one, as KEGS's own first run would write. */
+static void create_config(const char *path)
+{
+	struct stat st;
+	FILE *f;
+	if (stat(path, &st) == 0)
+		return;
+	f = fopen(path, "w");
+	if (f == NULL) {
+		printf("BMApple2: cannot create %s\n", path);
+		return;
+	}
+	fprintf(f, "# KEGS configuration file version %s\n", g_kegs_version_str);
+	fclose(f);
+	printf("BMApple2: created %s\n", path);
+}
+
+/* ---- Restarting -------------------------------------------------------------- */
+
+/* Boots the machine again, as switching it off and on does: the power-up
+   byte is made wrong ($3F4 is $3F3 XOR $A5 once the machine has started),
+   which every Apple II ROM takes as a power on, and the machine is reset. */
+void bmapple2_restart(void)
+{
+	set_memory_c(0x3f4, (get_memory_c(0x3f3) ^ 0xa5) ^ 0xff, 0);
+	do_reset();
+}
+
+/* ---- Starting a disk image ------------------------------------------------ */
+
+/* Which slot boots an image: 6 for 5.25" disks, 5 for 3.5" ones, 7 (KEGS's
+   SmartPort hard disks) for anything bigger. A WOZ image says which drive
+   it is for (its INFO chunk); the others go by size, which is enough to
+   tell 140K (plus a 2MG or nibble image's extra) from 800K from more. */
+static int boot_slot(const char *path)
+{
+	struct stat st;
+	const char *dot = strrchr(path, '.');
+	if (dot != NULL && strcasecmp(dot, ".woz") == 0) {
+		unsigned char header[22];
+		FILE *f = fopen(path, "rb");
+		int disk_type = 0;
+		if (f != NULL) {
+			if (fread(header, 1, sizeof header, f) == sizeof header
+			    && memcmp(header + 12, "INFO", 4) == 0)
+				disk_type = header[21];
+			fclose(f);
+		}
+		return disk_type == 2 ? 5 : 6;
+	}
+	if (stat(path, &st) != 0)
+		return -1;
+	if (st.st_size <= 300 * 1024)
+		return 6;
+	if (st.st_size <= 900 * 1024)
+		return 5;
+	return 7;
+}
+
+/* Puts PATH in drive 1 of the slot that boots it and restarts. The IIgs
+   (its Control Panel's startup slot "Scan", the default) and the IIe boot
+   from the highest slot with a disk, so drive 1 of the slots above it is
+   emptied; F4 puts those disks back. */
+static void autostart(const char *path)
+{
+	int slot = boot_slot(path);
+	int s;
+	if (slot < 0) {
+		printf("Web UI: cannot start %s: not found\n", path);
+		return;
+	}
+	printf("Web UI: starting %s from slot %d\n", path, slot);
+	for (s = 7; s > slot; s--)
+		iwm_eject_disk_by_num(s, 0);
+	insert_disk(slot, 0, path, 0, NULL, -1, 0);
+	bmapple2_restart();
 }
 
 /* ---- Requests from the web UI ------------------------------------------ */
 
-/* The web UI's server runs as a Circle task, which only runs when the
-   emulator yields, so these are only ever set between emulation steps. */
 static volatile int request_power = -1;   /* 0 reboot, 1 power off */
 static volatile int request_coldstart = FALSE;
+static char autostart_path[600];
 static volatile int request_autostart = FALSE;
-static char autostart_path[512];
 
-void bmcoco_request_power(int power_off)
+void bmapple2_request_power(int power_off)
 {
 	request_power = power_off ? 1 : 0;
 }
 
 /* Called by the web UI. */
-void bmcoco_request_coldstart(void)
+void bmapple2_request_coldstart(void)
 {
 	request_coldstart = TRUE;
 }
 
-/* Name kept from BMC64, whose web UI code calls it. */
+/* Called by the web UI ("start this file"), on core 0: the emulator takes
+   it up between frames (handle_requests()). One at a time. */
 void emu_autostart_interrupt(const char *path)
 {
-	snprintf(autostart_path, sizeof(autostart_path), "%s", path);
+	if (request_autostart)
+		return;
+	snprintf(autostart_path, sizeof autostart_path, "%s", path);
+	__sync_synchronize();
 	request_autostart = TRUE;
 }
 
-int bmcoco_pending_requests(void)
+int bmapple2_pending_requests(void)
 {
 	return request_power >= 0 || request_coldstart || request_autostart;
 }
@@ -649,26 +331,20 @@ int bmcoco_pending_requests(void)
 static void handle_requests(void)
 {
 	if (request_autostart) {
+		__sync_synchronize();
+		autostart(autostart_path);
 		request_autostart = FALSE;
-		LOG_PRINT("Web UI: starting %s\n", autostart_path);
-		xroar_load_file_by_type(autostart_path, 1);
 	}
 	if (request_coldstart) {
 		request_coldstart = FALSE;
-		LOG_PRINT("Web UI: hard reset\n");
-		xroar_hard_reset();
+		printf("Web UI: restart\n");
+		bmapple2_restart();
 	}
 	if (request_power >= 0) {
 		int power_off = request_power;
 		request_power = -1;
-		LOG_PRINT("%s\n", power_off ? "Shutting down" : "Rebooting");
-		/* Ejecting writes back changed disks. */
-		if (xroar.vdrive_interface != NULL) {
-			unsigned drive;
-			for (drive = 0; drive < 4; drive++)
-				vdrive_eject_disk(xroar.vdrive_interface, drive);
-		}
-		sync_files(TRUE);
+		printf("%s\n", power_off ? "Shutting down" : "Rebooting");
+		sync_files();
 		if (power_off)
 			host_power_off();
 		else
@@ -676,83 +352,175 @@ static void handle_requests(void)
 	}
 }
 
-/* ---- Menus waiting -------------------------------------------------------- */
-
 static double last_sync_time;
 
-void bmcoco_idle(void)
+void bmapple2_idle(void)
 {
 	double now = host_time();
-	feed_silence();
+	bmapple2_feed_silence();
 	if (now - last_sync_time >= 1.0) {
 		last_sync_time = now;
-		sync_files(FALSE);
+		sync_files();
 	}
 	if (request_power >= 0)
 		handle_requests();
 }
 
-/* ---- Timer pacing ----------------------------------------------------------- */
+/* ---- ROM --------------------------------------------------------------- */
 
-/* Emulated time since the last resync, and the real time it started. */
-static double paced_emulated;
-static double paced_start;
-static event_ticks paced_last_tick;
+static char rom_path[256];
 
-static void reset_pacing(void)
+/* PATH in the card's DIR folder ("" for the root). */
+static void card_path(char *path, size_t size, const char *dir, const char *name)
 {
-	paced_emulated = 0.0;
-	paced_start = host_time();
-	paced_last_tick = event_current_tick;
-	have_vsync_tick = FALSE;
+	const char *root = bmapple2_sd_root();
+	size_t len = strlen(root);
+	snprintf(path, size, "%s%s%s%s%s", root, len > 0 && root[len - 1] == '/' ? "" : "/",
+	         dir, dir[0] ? "/" : "", name);
 }
 
-/* After a slice of emulation: wait until real time catches up with it. */
-static void pace(void)
+/* Reads exactly SIZE bytes of roms/NAME into BUF. */
+static int read_rom_part(const char *name, unsigned char *buf, size_t size)
 {
-	double ahead;
-	paced_emulated += (double) (event_ticks) (event_current_tick - paced_last_tick)
-	                  / (double) EVENT_TICK_RATE;
-	paced_last_tick = event_current_tick;
-	if (vsync_lock || turbo) {
-		/* The display does the pacing (or nothing does). */
-		paced_emulated = 0.0;
-		paced_start = host_time();
+	char path[256];
+	struct stat st;
+	FILE *f;
+	size_t got;
+	card_path(path, sizeof path, "roms", name);
+	if (stat(path, &st) != 0 || (size_t) st.st_size != size)
+		return FALSE;
+	f = fopen(path, "rb");
+	if (f == NULL)
+		return FALSE;
+	got = fread(buf, 1, size, f);
+	fclose(f);
+	return got == size;
+}
+
+static void write_rom(const char *name, const unsigned char *data, size_t size)
+{
+	char path[256];
+	FILE *f;
+	card_path(path, sizeof path, "roms", name);
+	f = fopen(path, "wb");
+	if (f == NULL || fwrite(data, 1, size, f) != size) {
+		printf("BMApple2: cannot write %s\n", path);
+		if (f != NULL)
+			fclose(f);
 		return;
 	}
-	ahead = paced_emulated - (host_time() - paced_start);
-	if (ahead > 0.001) {
-		host_sleep_us((unsigned) (ahead * 1000000.0));
-	} else if (ahead < -0.25) {
-		/* Fell well behind (loading, a slow moment): don't race to
-		   catch up. */
-		paced_emulated = 0.0;
-		paced_start = host_time();
+	fclose(f);
+	printf("BMApple2: made %s\n", path);
+}
+
+/* MAME's ROM sets (Ample's too) have the chips, not ROM files: for the
+   IIgs ROM 3, apple2gs.zip's 341-0728 and 341-0748, the second with its
+   halves the other way round (MAME's apple2gs.cpp); for the enhanced IIe,
+   apple2e.zip's apple2ee/342-0304-a.e10 ($C000-$DFFF) and 342-0303-a.e8
+   ($E000-$FFFF), and a2diskiing.zip's 341-0027-a.p5 (the Disk II card's
+   PROM, at $600 in KEGS's IIe ROM file). Made into ROM.03 and APPLE2E.ROM
+   once, when those aren't there yet. */
+static void make_roms(void)
+{
+	char path[256];
+	struct stat st;
+	unsigned char *buf;
+
+	card_path(path, sizeof path, "roms", "ROM.03");
+	if (stat(path, &st) != 0) {
+		buf = malloc(256 * 1024);
+		if (buf != NULL && read_rom_part("341-0728", buf, 128 * 1024)
+		    && read_rom_part("341-0748", buf + 128 * 1024, 128 * 1024)) {
+			unsigned char *half = malloc(64 * 1024);
+			if (half != NULL) {
+				memcpy(half, buf + 128 * 1024, 64 * 1024);
+				memmove(buf + 128 * 1024, buf + 192 * 1024, 64 * 1024);
+				memcpy(buf + 192 * 1024, half, 64 * 1024);
+				free(half);
+				write_rom("ROM.03", buf, 256 * 1024);
+			}
+		}
+		free(buf);
+	}
+
+	card_path(path, sizeof path, "roms", "APPLE2E.ROM");
+	if (stat(path, &st) != 0) {
+		buf = calloc(32 * 1024, 1);
+		if (buf != NULL && read_rom_part("342-0304-a.e10", buf + 16 * 1024, 8 * 1024)
+		    && read_rom_part("342-0303-a.e8", buf + 24 * 1024, 8 * 1024)) {
+			if (!read_rom_part("341-0027-a.p5", buf + 0x600, 256))
+				printf("BMApple2: no 341-0027-a.p5: the IIe has no Disk II card\n");
+			write_rom("APPLE2E.ROM", buf, 32 * 1024);
+		}
+		free(buf);
 	}
 }
 
-void bmcoco_set_turbo(int on)
+/* The ROM is looked for in the roms folder, then the card's root, under the
+   names it usually has (KEGS's list, config.c, and the files ROM sets of
+   other emulators use), and passed to KEGS with -rom: KEGS's own search
+   (g_kegs_default_paths) works from the current folder and HOME, which a
+   bare metal kernel doesn't have. ROM 3 is preferred to ROM 01, and both
+   to an Apple IIe ROM (32K), which makes KEGS a IIe. */
+static const char *find_rom(void)
 {
-	turbo = on;
-	osd_notify(on ? "Turbo on" : "Turbo off");
-	reset_pacing();
+	static const char *const names[] = {
+		"ROM.03", "ROM03", "APPLE2GS.ROM2", "Rom03gd", "ROM.01", "ROM01",
+		"APPLE2GS.ROM", "342-0077-b", "xgs.rom", "XGS.ROM", "ROM",
+		"APPLE2E.ROM", NULL
+	};
+	static const char *const dirs[] = {"roms", "", NULL};
+	int d, n;
+	make_roms();
+	for (d = 0; dirs[d] != NULL; d++) {
+		for (n = 0; names[n] != NULL; n++) {
+			struct stat st;
+			card_path(rom_path, sizeof rom_path, dirs[d], names[n]);
+			if (stat(rom_path, &st) == 0 && S_ISREG(st.st_mode)
+			    && (st.st_size == 32 * 1024 || st.st_size == 128 * 1024
+			        || st.st_size == 256 * 1024))
+				return rom_path;
+		}
+	}
+	rom_path[0] = '\0';
+	return NULL;
+}
+
+const char *bmapple2_rom_file(void)
+{
+	return rom_path[0] ? rom_path : NULL;
+}
+
+void bmapple2_kegs_config(void)
+{
+	cfg_toggle_config_panel();
 }
 
 /* ---- Input --------------------------------------------------------------- */
 
 static int open_menu;
 static int pad_last_menu[HOST_PADS];
+static int pad_last_keys[HOST_PADS];
+
+/* Gamepad buttons that are keys, as in BMCoco: X is Space, Y is Return. */
+static const struct {
+	int bit;
+	int adb;
+} pad_keys[] = {
+	{HOST_PAD_X, 0x31},
+	{HOST_PAD_Y, 0x24},
+};
 
 static void process_input(void)
 {
-	int usage, pressed, pad;
+	int usage, pressed, pad, dx, dy, buttons;
+
 	while (host_key_event(&usage, &pressed)) {
-		/* The power key: Shut Down. The Pi 400's keyboard sends it for
-		   Fn+F10 while the Pi is running (Raspberry Pi, "Have you tried
-		   turning it off and on again?", raspberrypi.com news, 2021). */
+		int adb;
+		/* The power key: Shut Down (the Pi 400 sends it for Fn+F10). */
 		if (usage == USAGE_POWER) {
 			if (pressed)
-				bmcoco_request_power(1);
+				bmapple2_request_power(1);
 			continue;
 		}
 		if (usage == KEY_MENU) {
@@ -760,35 +528,18 @@ static void process_input(void)
 				open_menu = TRUE;
 			continue;
 		}
-		if (usage == KEY_TURBO) {
-			if (pressed)
-				bmcoco_set_turbo(!turbo);
-			continue;
-		}
-		if (usage == KEY_RESET) {
-			if (pressed) {
-				if (host_key_modifiers() & 0x22) {
-					osd_notify("Hard reset");
-					xroar_hard_reset();
-				} else {
-					osd_notify("Reset");
-					xroar_soft_reset();
-				}
-			}
-			continue;
-		}
-		/* With Ctrl held, XRoar's keyboard code runs emulator commands
-		   meant for its desktop versions (Ctrl+Q quits); the CoCo has no
-		   Ctrl key (the CoCo 3's is on Caps Lock and the Windows keys). */
-		if (usage < 0 || usage > 0xff || usage == USAGE_LCTRL || usage == USAGE_RCTRL)
-			continue;
-		if (pressed)
-			hk_scan_press((uint8_t) usage);
-		else
-			hk_scan_release((uint8_t) usage);
+		adb = bmapple2_usage_to_adb(usage);
+		if (adb >= 0)
+			adb_physical_key_update(main_kimage, adb, 0, !pressed);
 	}
 
-	/* Gamepad Home, or Select and Start together, open the menu. */
+	if (host_mouse_read(&dx, &dy, &buttons)) {
+		/* 0x1000: x and y are deltas (adb.c). */
+		adb_update_mouse(main_kimage, dx, dy, buttons & 7, 0x1000 | 7);
+	}
+
+	/* Gamepad Home, or Select and Start together, open the menu (A, B and
+	   the stick are the joystick: joystick.c). */
 	for (pad = 0; pad < HOST_PADS; pad++) {
 		int state = host_pad_state(pad);
 		int menu;
@@ -800,10 +551,23 @@ static void process_input(void)
 			open_menu = TRUE;
 		pad_last_menu[pad] = menu;
 	}
-	bmcoco_pad_keys();
+
+	/* X and Y, from any gamepad. */
+	for (pad = 0; pad < HOST_PADS; pad++) {
+		int state = host_pad_state(pad);
+		unsigned k;
+		if (state < 0)
+			state = 0;
+		for (k = 0; k < sizeof pad_keys / sizeof pad_keys[0]; k++) {
+			int down = (state & pad_keys[k].bit) != 0;
+			if (down != ((pad_last_keys[pad] & pad_keys[k].bit) != 0))
+				adb_physical_key_update(main_kimage, pad_keys[k].adb, 0, !down);
+		}
+		pad_last_keys[pad] = state;
+	}
 }
 
-/* ---- Main loop --------------------------------------------------------------- */
+/* ---- Main loop ------------------------------------------------------------- */
 
 /* Shows the web UI's address once the network is up. */
 static void show_network_address(void)
@@ -820,154 +584,127 @@ static void show_network_address(void)
 	}
 }
 
-/* Builds XRoar's command line from cmdline.txt options. */
-static int build_args(char **argv, int max)
+void bmapple2_main(void)
 {
-	int argc = 0;
-	const char *value;
-
-	argv[argc++] = "xroar";
-
-	value = host_option("machine", NULL);
-	if (value != NULL && *value != '\0') {
-		argv[argc++] = "-default-machine";
-		argv[argc++] = (char *) value;
-	}
-
-	/* Keyboard layout for "typed characters" mode and the menus. */
-	value = host_option("keyboard", "us");
-	argv[argc++] = "-kbd-lang";
-	argv[argc++] = (char *) value;
-
-	/* Keys type the characters printed on them (Shift+' types "), rather
-	   than being the CoCo key in the same place. The menu turns it off
-	   for games that want the CoCo's layout. */
-	argv[argc++] = option_on("typed_keys", TRUE) ? "-kbd-translate" : "-no-kbd-translate";
-
-	/* Artifact colour renderer: none, simple, 5bit, partial, simulated. */
-	value = host_option("artifacts", NULL);
-	if (value != NULL && *value != '\0') {
-		argv[argc++] = "-ccr";
-		argv[argc++] = (char *) value;
-	}
-
-	/* Picture area: zoomed, title, action, underscan. */
-	value = host_option("picture", NULL);
-	if (value != NULL && *value != '\0') {
-		argv[argc++] = "-vo-picture";
-		argv[argc++] = (char *) value;
-	}
-
-	/* cmp (S-Video), cmp-br, cmp-rb (composite: artifact colours) or rgb. */
-	value = host_option("tv_input", NULL);
-	if (value != NULL && *value != '\0') {
-		argv[argc++] = "-tv-input";
-		argv[argc++] = (char *) value;
-	}
-
-	/* Which joystick is plugged into each port: joy0, joy1, kjoy0. */
-	value = host_option("joy_right", NULL);
-	if (value != NULL && *value != '\0') {
-		argv[argc++] = "-joy-right";
-		argv[argc++] = (char *) value;
-	}
-	value = host_option("joy_left", NULL);
-	if (value != NULL && *value != '\0') {
-		argv[argc++] = "-joy-left";
-		argv[argc++] = (char *) value;
-	}
-
-	argv[argc++] = "-volume";
-	argv[argc++] = (char *) host_option("volume", "70");
-
-	/* A disk, tape, cartridge or program to start: autostart=/games/x.dsk */
-	value = host_option("autostart", NULL);
-	if (value != NULL && *value != '\0' && argc + 2 <= max) {
-		argv[argc++] = "-run";
-		argv[argc++] = (char *) value;
-	}
-
-	argv[argc] = NULL;
-	return argc;
-}
-
-static void fatal(const char *text)
-{
-	LOG_ERROR("%s\n", text);
-	osd_open();
-	osd_message(text, FALSE);
-	for (;;) {
-		bmcoco_idle();
-		host_video_present(TRUE);
-	}
-}
-
-void bmcoco_main(void)
-{
-	static char *argv[40];
-	int argc, pitch;
+	static char cfg_path[256];
+	static char *argv[8];
+	int argc = 0, pitch;
 	double last_second;
 
 	if (host_video_init(FB_W, FB_H, &fb_pixels, &pitch) != 0) {
-		LOG_ERROR("BMCoco: no display\n");
+		printf("BMApple2: no display\n");
 		for (;;)
 			host_sleep_us(1000000);
 	}
 	fb_pitch_px = pitch / 2;
 	clear_framebuffer();
 	apply_view();
+	/* Where the host can set the video mode (the Pi 4), the display runs
+	   at the IIgs's (and KEGS's IIe's) 59.92 Hz, then it is timed. */
+	host_display_match_rate(VBL_RATE);
 	measure_refresh_rate();
-	open_sound();
+	update_sync_mode();
 
-	argc = build_args(argv, 38);
-	ui_module_list = bmcoco_ui_module_list;
-	if (xroar_init(argc, argv) == NULL)
-		fatal("XRoar did not start. The log (see the User Guide) says why.");
-	xroar_init_finish();
-	choose_machine();
+	/* config.kegs (disks, settings) in the card's root; the ROM found. */
+	snprintf(cfg_path, sizeof(cfg_path), "%s%sconfig.kegs", bmapple2_sd_root(),
+	         bmapple2_sd_root()[strlen(bmapple2_sd_root()) - 1] == '/' ? "" : "/");
+	create_config(cfg_path);
+	argv[argc++] = "bmapple2";
+	if (getenv("BMAPPLE2_KEGS_NOIGNHALT"))
+		argv[argc++] = "-noignhalt";
+	argv[argc++] = "-cfg";
+	argv[argc++] = cfg_path;
+	if (find_rom() != NULL) {
+		argv[argc++] = "-rom";
+		argv[argc++] = rom_path;
+		printf("BMApple2: ROM %s\n", rom_path);
+	} else {
+		/* KEGS then opens its configuration screen to choose one. */
+		printf("BMApple2: no IIgs ROM in roms/ (see roms/ROMS.txt)\n");
+	}
+	argv[argc] = NULL;
+	if (parse_argv(argc, argv, 1) != 0)
+		printf("BMApple2: KEGS didn't like its arguments\n");
 
+	g_audio_enable = option_on("sound", TRUE) ? 1 : 0;
+
+	/* 0xRRGGBB pixels (see the top). */
+	video_set_red_mask(0xff0000);
+	video_set_green_mask(0x00ff00);
+	video_set_blue_mask(0x0000ff);
+	video_set_alpha_mask(0);
+	/* The Apple II's 16 colours, from the masks (as KEGS's front ends do);
+	   Super Hi-Res works its own out as it goes. */
+	video_set_palette();
+
+	/* The joystick is the gamepads and GPIO joysticks (joystick.c), KEGS's
+	   "Native Joystick 1", rather than its default of the keypad. Set
+	   before KEGS reads config.kegs, it is the default, so a choice made
+	   in KEGS's settings (F4) still sticks. */
+	g_joystick_type = 2;
+
+	/* The speed of the machine the ROM is for: 1 MHz for an Apple IIe
+	   (a 32K ROM), the IIgs's own 2.8 MHz for a IIgs, rather than KEGS's
+	   default of an 8 MHz ZipGS accelerator, which the Pi 2 and 3 can't
+	   always keep up with, and which runs old games too fast. As with the
+	   joystick, a speed chosen with F6 or F4 still sticks. */
 	{
-		const char *missing = bmcoco_missing_roms();
-		if (missing != NULL) {
-			char text[320];
-			snprintf(text, sizeof(text),
-			         "ROMs not found: %s\n\n"
-			         "Copy the Color Computer ROM files into the roms folder "
-			         "on the SD card (see ROMS.txt there), then restart.\n\n"
-			         "Press F12 for the menu.", missing);
-			LOG_WARN("BMCoco: ROMs not found: %s\n", missing);
-			osd_message(text, TRUE);
-		}
+		struct stat st;
+		int iie = rom_path[0] != '\0' && stat(rom_path, &st) == 0
+		          && st.st_size == 32 * 1024;
+		g_limit_speed = iie ? 1 : 2;
 	}
 
-	reset_pacing();
-	last_second = host_time();
+	if (kegs_init(32, FB_W, FB_H, 1) != 0) {
+		osd_open();
+		osd_message("KEGS did not start. The log (see the User Guide) says why.", FALSE);
+		for (;;) {
+			bmapple2_idle();
+			host_video_present(TRUE);
+		}
+	}
+	main_kimage = video_get_kimage(0);
+	video_set_active(main_kimage, 1);
+	video_update_scale(main_kimage, FB_W, FB_H, 1);
+	/* The whole picture, status lines included (see FB_H). */
+	/* The status lines come and go (F5), so leave room for many. */
+	kegs_height = main_kimage->a2_height + 256;
+	if (kegs_height < 1024)
+		kegs_height = 1024;
+	if (main_kimage->a2_width_full > FB_W)
+		printf("BMApple2: KEGS's picture is %d wide, expected %d\n",
+		       main_kimage->a2_width_full, FB_W);
+	kegs_pixels = calloc((size_t) FB_W * kegs_height, sizeof(*kegs_pixels));
 
+	last_second = host_time();
 	for (;;) {
 		double now;
 
 		process_input();
 		if (open_menu) {
 			open_menu = FALSE;
-			hk_focus_in();
-			bmcoco_menu();
-			/* Keys held when the menu closed must not stick. */
-			hk_focus_in();
-			reset_pacing();
+			adb_kbd_repeat_off();
+			bmapple2_menu();
+			video_set_x_refresh_needed(main_kimage, 1);
 		}
 
-		xroar_run(EVENT_MS(10));
-		pace();
+		if (run_16ms() != 0) {
+			osd_open();
+			osd_message("KEGS stopped. The log (see the User Guide) says why.", FALSE);
+			for (;;) {
+				bmapple2_idle();
+				host_video_present(TRUE);
+			}
+		}
+		copy_picture();
+		osd_draw_notification(fb_pixels, fb_pitch_px, FB_W, FB_H);
+		host_video_present(vsync_lock);
 
 		now = host_time();
 		if (now - last_second >= 1.0) {
 			last_second = now;
-			sync_files(FALSE);
+			sync_files();
 			show_network_address();
-			if (ao_corrections > 200 || ao_corrections < -200) {
-				LOG_DEBUG(1, "BMCoco: sound rate corrections %+d\n", ao_corrections);
-			}
-			ao_corrections = 0;
 		}
 		handle_requests();
 	}

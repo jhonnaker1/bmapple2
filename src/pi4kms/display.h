@@ -3,7 +3,7 @@
 //
 // The direct display driver's picture: two 32-bit pixel buffers in the
 // ARM's memory, shown in turn as one HVS plane, scaled to its place on the
-// screen by the HVS (hvs.h). BMCoco draws a frame into the buffer not
+// screen by the HVS (hvs.h). BMApple2 draws a frame into the buffer not
 // on screen, then flips.
 //
 // Sources:
@@ -17,12 +17,12 @@
 //    semaphore.cpp: Circle's VCHIQ waits yield, which is how the Pi 3 runs
 //    them while it waits for a frame.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMCOCO_PI4KMS_DISPLAY_H_
-#define BMCOCO_PI4KMS_DISPLAY_H_
+#ifndef BMAPPLE2_PI4KMS_DISPLAY_H_
+#define BMAPPLE2_PI4KMS_DISPLAY_H_
 
 #include "hvs.h"
 #include "modeset.h"

@@ -16,8 +16,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#ifndef BMCOCO_NETWORK_H_
-#define BMCOCO_NETWORK_H_
+#ifndef BMAPPLE2_NETWORK_H_
+#define BMAPPLE2_NETWORK_H_
 
 class Options;
 

@@ -1,130 +1,155 @@
-# BMCoco User Guide
+# BMApple2 User Guide
 
-BMCoco turns a Raspberry Pi into a Tandy Color Computer. It runs the XRoar
-emulator by Ciaran Anscomb on the bare hardware, so it starts in a couple of
-seconds and can be switched off at any time.
+BMApple2 turns a Raspberry Pi into an Apple IIgs (or an Apple IIe). It runs
+the KEGS emulator by Kent Dickey on the bare hardware, so it starts in a
+couple of seconds and can be switched off at any time.
 
 ## The SD card
 
 | File or folder   | What it is                                                  |
 |------------------|-------------------------------------------------------------|
-| `kernel8-32.img`, `kernel7.img`, `kernel8-rpi4.img` | BMCoco for the Pi 3 / Zero 2 W, the Pi 2, and the Pi 4 / Pi 400 |
+| `kernel8-32.img`, `kernel7.img`, `kernel8-rpi4.img` | BMApple2 for the Pi 3 / Zero 2 W, the Pi 2, and the Pi 4 / Pi 400 |
 | `bootcode.bin`, `start.elf`, `fixup.dat`, `start4.elf`, `fixup4.dat`, `armstub8-rpi4.bin`, `*.dtb` | Raspberry Pi firmware |
 | `config.txt`     | Raspberry Pi firmware settings: the display mode            |
-| `cmdline.txt`    | BMCoco's options (see Options)                              |
-| `bmcoco.cfg`     | Settings changed in the menu (written by BMCoco)            |
-| `xroar.conf`     | Optional: XRoar's own configuration file, for anything else |
-| `roms/`          | The CoCo's ROMs: you supply them (see ROMs)                 |
-| `disks/`, `tapes/`, `carts/`, `programs/` | For your CoCo files (any folder works) |
+| `cmdline.txt`    | BMApple2's options (see Options)                            |
+| `bmapple2.cfg`   | Settings changed in BMApple2's menu (written by BMApple2)   |
+| `config.kegs`    | KEGS's settings: the disks in each drive, the ROM, speed, joystick, the IIgs's battery RAM (written by KEGS) |
+| `roms/`          | The IIgs or IIe ROM: you supply it (see ROMs)               |
+| `disks/`         | For your disk images (any folder works)                     |
 | `firmware/`      | Wi-Fi firmware                                              |
 
-Changed disk images are written back to the card two seconds after the CoCo
-last wrote to them (the first time, the original is kept as `.bak`). Wait
-that long after saving before switching off.
+KEGS writes to disk images as the emulated machine writes to its disks, and
+BMApple2 pushes everything out to the card every second, so the Pi can be
+switched off at any time (give it a second after saving).
 
 ## ROMs
 
-The CoCo's ROMs are copyrighted, so BMCoco doesn't include them. Copy your
-own into `roms` (or the root of the card). XRoar finds them by name:
+The Apple ROMs are copyrighted, so BMApple2 doesn't include them. Copy your
+own into `roms` (or the root of the card):
 
-| Machine            | ROM files                                       |
+| Machine            | ROM file                                        |
 |--------------------|-------------------------------------------------|
-| CoCo 1/2           | `bas13.rom` and `extbas11.rom` (older: `bas10`-`bas12`, `extbas10`) |
-| Disks (RS-DOS)     | `disk11.rom` (or `disk10.rom`)                  |
-| CoCo 3             | `coco3.rom`                                     |
-| MC-10              | `mc10.rom`                                      |
-| Dragon 32 / 64     | `d32.rom` / `d64_1.rom`, `d64_2.rom`            |
+| Apple IIgs ROM 3   | `ROM.03` (or `APPLE2GS.ROM2`, `Rom03gd`), 256K  |
+| Apple IIgs ROM 01  | `ROM.01` (or `APPLE2GS.ROM`, `xgs.rom`, `342-0077-b`), 128K |
+| Apple IIe          | `APPLE2E.ROM`, 32K: the 16K IIe ROM in its last 16K, the Disk II card's PROM at $600 (the form other emulators use) |
 
-BMCoco starts the first of these it has ROMs for: CoCo 2 (NTSC), CoCo
-(NTSC), CoCo 3, ... If it has none, it says which files it is missing.
+BMApple2 starts the first it finds: ROM 3, then ROM 01, then the IIe. Choose
+another with **F4**, *ROM File Selection*.
 
-All the CoCo ROMs can be downloaded from the
-[Color Computer Archive](https://colorcomputerarchive.com/repo/ROMs/XRoar/CoCo/),
-already named this way. Copy the files from both its `BASIC_OS` folder
-(Color BASIC, Extended BASIC, CoCo 3) and its `DOS` folder (Disk BASIC)
-into `roms`.
+**From a MAME ROM set** (such as Ample's on the Mac, in
+`~/Library/Application Support/Ample/roms`): MAME keeps the ROM chips rather
+than ROM files. Copy these out of the zip files into `roms`, and BMApple2
+makes `ROM.03` and `APPLE2E.ROM` from them the first time it starts:
 
-## The menu
+| Machine            | From MAME's zip files                           |
+|--------------------|-------------------------------------------------|
+| Apple IIgs ROM 3   | `341-0728` and `341-0748` from `apple2gs.zip`   |
+| Apple IIgs ROM 01  | `342-0077-b` from `apple2gs.zip` (in `apple2gsr1`), used as it is |
+| Apple IIe          | `342-0304-a.e10` and `342-0303-a.e8` from `apple2e.zip` (in `apple2ee`), and `341-0027-a.p5` from `a2diskiing.zip` |
 
-**F12** (or a gamepad's **Home** button, or **Select+Start**) opens the
-menu; **Esc** goes back a page and F12 closes it. The arrow keys or D-pad
-move, **Enter** or **A** chooses. In a list, typing a letter jumps to the
-next item starting with it.
+## Disks
+
+KEGS has the IIgs's drives: **slot 7** for hard disks (up to 16 of them),
+**slot 5** for 3.5" disks (two drives) and **slot 6** for 5.25" disks (two
+drives). It reads ProDOS order (`.po`), 2IMG (`.2mg`), hard disk (`.hdv`),
+DOS order (`.dsk`, `.do`), nibble (`.nib`) and WOZ (`.woz`) images, and
+ShrinkIt archives (`.shk`, `.sdk`).
+
+Press **F4** for KEGS's settings, choose *Disk Configuration*, move to a
+drive and press Return to choose a disk image for it. The disks are
+remembered in `config.kegs`. Then restart the machine: *Restart* in the
+**F10** menu.
+
+On a IIgs the startup slot is set in its Control Panel (Ctrl+Open Apple+Esc,
+then *Slots*); the default, *Scan*, starts the highest slot with a disk: 7,
+then 6, then 5.
+
+From the web UI, clicking a disk image starts it: BMApple2 puts it in drive
+1 of the slot that boots it (5.25" disks in slot 6, 800K disks in slot 5,
+anything bigger in slot 7), empties drive 1 of the slots above it (so it is
+the one that starts), and restarts the machine.
+
+## The menus
+
+**F4** opens KEGS's own settings: disks, the ROM, the speed, the joystick,
+the Mockingboard (slot 4), serial ports and more, and the IIgs's video
+options. Its own screen explains its keys; F4 closes it.
+
+**F10** (or a gamepad's **Home** button, or **Select+Start**) opens
+BMApple2's menu; **Esc** goes back a page and F10 closes it. The arrow keys
+or D-pad move, **Return** or **A** chooses.
 
 | Item           | What it does |
 |----------------|--------------|
-| Run a Program  | Choose a disk, tape, cartridge or program and start it: XRoar inserts it and types the commands to run it (`RUN"..."` from a disk, `CLOAD` from a tape, ...) |
-| Disk Drives    | Insert or eject a disk in drives 0-3, and write protect it |
-| Cassette       | Insert a tape (then type `CLOAD` or `CLOADM`), rewind, eject, fast loading |
-| Cartridge      | Plug in a cartridge file, one of XRoar's built in cartridges (Disk BASIC and others), or none |
-| Machine        | CoCo 1, 2 or 3, PAL or NTSC, with or without a 6309, and the other machines XRoar emulates. Machines without ROMs are marked |
-| Joysticks      | What is plugged into each joystick port, which gamepad is which joystick, GPIO joysticks, and a joystick test |
-| Video          | TV input (composite with artifact colours, S-Video, or RGB for the CoCo 3), the artifact colour renderer, how much border to show, the frame lock, CRT effect and smooth scaling |
-| Keyboard       | Typed characters on or off, and the PC keyboard's layout |
-| Sound          | Volume, and HDMI or the headphone jack |
+| KEGS Settings  | KEGS's settings, as F4 |
+| Reset          | The reset key (Ctrl+F12) |
+| Restart        | Starts the machine again, as switching it off and on does: it boots from its disks |
+| Video          | The frame lock, CRT effect and smooth scaling |
+| Sound          | HDMI or the headphone jack |
 | Network        | Ethernet or Wi-Fi, the web UI (see below) |
-| Turbo          | Run as fast as the Pi can (also F11) |
-| Reset, Hard Reset | The reset button (F10), or power off and on (Shift+F10) |
-| About          | Versions, the machine, ROM status, display and network |
-| Reboot, Shut Down | Restart BMCoco, or halt the Pi. Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
+| About          | Versions, the ROM, display and network |
+| Reboot, Shut Down | Restart BMApple2, or halt the Pi. Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
 
-Settings changed in the menu are kept in `bmcoco.cfg` and used at the next
-boot.
+Settings changed in BMApple2's menu are kept in `bmapple2.cfg` and used at
+the next boot. KEGS keeps its own in `config.kegs`.
 
-## Keyboard
+## Keyboard and mouse
 
-| PC key                 | CoCo                                          |
+| PC key                 | Apple                                         |
 |------------------------|-----------------------------------------------|
-| F12                    | BMCoco menu                                   |
-| F11                    | Turbo on/off                                  |
-| F10, Shift+F10         | Reset, hard reset                             |
-| Esc                    | BREAK                                         |
-| Home                   | CLEAR                                         |
-| Arrow keys, Tab        | Arrow keys (Tab is right arrow)               |
-| Backspace, Delete      | Left arrow (backspace)                        |
-| Shift+Backspace        | Erase the line                                |
-| Shift+Enter            | Caps lock (SHIFT+0)                           |
-| Alt                    | CoCo 3 ALT                                    |
-| Caps Lock, Windows     | CoCo 3 CTRL                                   |
-| F1, F2                 | CoCo 3 F1, F2                                 |
+| F10                    | BMApple2's menu                               |
+| F4                     | KEGS's settings                               |
+| Ctrl+F12               | Reset                                         |
+| Windows (Command on a Mac keyboard), F1 | Open Apple (Command)         |
+| Alt, F2                | Option (Solid Apple)                          |
+| F3                     | Escape                                        |
+| F5                     | KEGS's status lines (speed and so on)         |
+| F6                     | Speed: 1 MHz, 2.8 MHz, 8 MHz (ZipGS), unlimited |
+| Shift+F6, F7           | KEGS's debugger (not useful without a host terminal) |
+| F9                     | Swap or invert the joystick's axes (with Shift, without) |
+| Pause                  | F15                                           |
+| Insert                 | Help                                          |
 
-By default keys type the characters printed on them, in the layout set with
-`keyboard=` in `cmdline.txt` (or *Keyboard* in the menu): Shift+' types `"`
-and Shift+8 `*`, as you would expect. Some games read the keyboard matrix
-directly and want the keys where the CoCo had them: turn off *Typed
-Characters* in the menu, and the PC keys then sit in the CoCo's places
-(Shift+2 is `"`, the key right of 0 is `:`).
+The other keys are where they are on an Apple keyboard. The IIgs reads the
+keyboard itself, in its own layout (its Control Panel chooses one).
+
+A **USB mouse** is the IIgs's mouse.
+
+## Speed
+
+KEGS's default is an 8 MHz ZipGS accelerator; BMApple2's is the machine's
+own speed instead: **2.8 MHz** for a IIgs, **1 MHz** for a IIe. Old games
+then run as fast as they should, and the Pi 2 and 3 keep up. **F6** (or F4,
+*Speed*) changes it, and KEGS keeps the choice in `config.kegs`.
 
 ## Joysticks
 
-The CoCo's joysticks are analog. BMCoco has two, Joystick 1 and Joystick 2,
-plugged into the CoCo's right and left ports (most games use the right
-one). Each takes its input from:
+The Apple II's joystick is analog: two paddles and two (or three) buttons.
+BMApple2 has two joysticks; the first is paddles 0 and 1, the second
+paddles 2 and 3. Each takes its input from:
 
-- a USB gamepad (by default gamepad 1 for Joystick 1, gamepad 2 for
-  Joystick 2; change it in the menu). Its left analog stick gives the
-  position as it is, the whole 0-63 range the CoCo reads; the D-pad pushes
-  to the edges.
+- a USB gamepad (gamepad 1 for the first, gamepad 2 for the second). Its
+  left analog stick gives the position as it is, the whole range the Apple
+  reads; the D-pad pushes to the edges.
 - a joystick wired to the GPIO header (see below), which also pushes to the
   edges.
 
-| Gamepad button  | CoCo                       |
-|-----------------|----------------------------|
-| A               | Fire                       |
-| B               | Second fire button (CoCo 3)|
-| X               | Space                      |
-| Y               | Enter                      |
-| Home, Select+Start | BMCoco menu             |
+| Gamepad button  | Apple                             |
+|-----------------|-----------------------------------|
+| A               | Button 0 (gamepad 2: button 2)    |
+| B               | Button 1                          |
+| X               | Space                             |
+| Y               | Return                            |
+| Home, Select+Start | BMApple2's menu                |
 
-In the menu's *Joysticks* page each port can also be given **Arrow keys**:
-the arrow keys then move that joystick and left Alt fires (the arrows then
-no longer reach the CoCo as keys). *Joystick Test* shows what the CoCo
-reads.
+KEGS's *Joystick* setting (F4) must be *Native Joystick 1*, which is
+BMApple2's default; KEGS's own default is the keypad (the numeric keypad's
+keys move it), and choosing it there still works.
 
-**Joysticks on the GPIO header**: set `gpio_joysticks=1` in `cmdline.txt`
-(or in the menu, then reboot). The wiring is BMC64's "GPIO Config 1". The
-pins are active low (each switch connects the pin to ground) and BMCoco
-turns on the Pi's pull-ups:
+**Joysticks on the GPIO header**: set `gpio_joysticks=1` in `cmdline.txt`,
+then reboot. The wiring is BMC64's "GPIO Config 1". The pins are active low
+(each switch connects the pin to ground) and BMApple2 turns on the Pi's
+pull-ups:
 
 | Signal | Joystick 1 (GPIO) | Joystick 2 (GPIO) |
 |--------|-------------------|-------------------|
@@ -135,36 +160,28 @@ turns on the Pi's pull-ups:
 | Fire   | 23                | 19                |
 
 Ground is on pins 6, 9, 14, 20, 25, 30, 34 or 39 of the header. These are
-digital (switch) joysticks, like an Atari-style stick with an adapter;
-the CoCo's own analog joysticks need an analog to digital converter, which
+digital (switch) joysticks, like an Atari-style stick with an adapter; an
+Apple II's own analog joystick needs an analog to digital converter, which
 the Pi doesn't have.
 
 ## Display and timing
 
-BMCoco emulates an NTSC CoCo (60 Hz), and `config.txt` sets the display to
-720p at 60 Hz to match. When the display's refresh rate is within 2% of the
-machine's, each CoCo frame is shown on exactly one display refresh, which
-gives perfectly smooth scrolling (the CoCo then runs 0.1% fast, which
-nothing notices). Otherwise the emulation keeps exact time and frames are
-shown as they come. The About page shows which is in use.
+The IIgs (and KEGS's IIe) shows 59.92 frames a second, and `config.txt`
+sets the display to 720p at 60 Hz to match. When the display's refresh
+rate is within 2% of that, each frame is shown on exactly one display
+refresh, which gives perfectly smooth scrolling (the IIgs then runs 0.1%
+fast, which nothing notices). Otherwise the emulation keeps exact time and
+frames are shown as they come. On a Pi 4 BMApple2 sets the display to the
+IIgs's exact rate itself. `vsync=on` or `vsync=off` in `cmdline.txt` (or
+*Frame Lock* in the menu) forces one or the other.
 
-For a PAL CoCo or a Dragon (50 Hz), choose it in *Machine* and set
-`hdmi_mode=19` (720p 50 Hz) in `config.txt` (on a Pi 2 or 3; a Pi 4 sets
-the display to the machine's exact rate itself, NTSC or PAL). `vsync=on` or `vsync=off` in
-`cmdline.txt` (or *Frame Lock* in the menu) forces one or the other.
-
-**Artifact colours**: many CoCo 1/2 games draw in PMODE 4 and rely on the
-way an NTSC TV smears its black and white dots into red and blue. *TV
-Input: Composite* shows them; on a real CoCo which of the two colours
-appeared depended on luck at power on, so if a game's colours are swapped
-choose the other phase (blue-red or red-blue). *S-Video* shows the dots in
-black and white. The *Artifact Colours* renderer chooses between a quick
-table (*Simple*, *5-bit*) and XRoar's simulation of an NTSC TV
-(*Partial*, *Simulated*: the most accurate, but it uses more of the Pi).
+The picture is KEGS's: the 640x400 Apple area (Super Hi-Res is 640x200 or
+320x200, the other modes 560x192 or 280x192, all doubled up) and its
+border, shown 4:3 as on an Apple monitor.
 
 ## Networking and the web UI
 
-BMCoco can join your network over Ethernet or Wi-Fi and serve a web page
+BMApple2 can join your network over Ethernet or Wi-Fi and serve a web page
 for managing the SD card from any browser on the same network, so files can
 be copied to and from the Pi without taking the card out. It is the web UI
 from BMC64.
@@ -176,7 +193,8 @@ it can hear, strongest first. Pick yours: it fills in *Wi-Fi Network*, and
 if the network needs a password, *Wi-Fi Password* is next. Then reboot.
 Set *Wi-Fi Country* to your two letter country code too; it decides which
 channels are allowed. A hidden network can be typed in under *Wi-Fi
-Network* instead. Or, in `cmdline.txt` (on the same single line as the other options):
+Network* instead. Or, in `cmdline.txt` (on the same single line as the
+other options):
 
 - Ethernet: `network=ethernet`
 - Wi-Fi: `network=wifi`, and copy `wpa_supplicant.conf.example` to
@@ -193,24 +211,24 @@ Open that address in a browser.
 The web UI has:
 
 - **Dashboard**: the Pi's model, address, uptime, temperature, power and
-  throttling warnings and free space on the card. Buttons to **Hard Reset**
-  the CoCo (power it off and on), **Reboot** BMCoco, **Shut Down** (the
-  Pi halts; switch it off, then on again to restart; a Pi 400 switches
-  itself off, and its power key starts it again), and **Disable Web UI**
-  until the next reboot.
+  throttling warnings and free space on the card. Buttons to **Restart**
+  the Apple (as switching it off and on), **Reboot** BMApple2, **Shut
+  Down** (the Pi halts; switch it off, then on again to restart; a Pi 400
+  switches itself off, and its power key starts it again), and **Disable
+  Web UI** until the next reboot.
 - **Files**: browse the SD card; upload (or drag and drop) files into a
   folder, download, rename, delete, and create folders. Clicking a disk
-  image, program, cartridge or tape **starts it** on the CoCo, the same as
-  *Run a Program*. `cmdline.txt`, `config.txt`, `bmcoco.cfg`,
-  `xroar.conf` and `wpa_supplicant.conf` can be **edited** in the browser; changes take
-  effect after a reboot, and the previous version is kept as `.bak`.
+  image **starts it** (see Disks). `cmdline.txt`, `config.txt`,
+  `bmapple2.cfg`, `config.kegs` and `wpa_supplicant.conf` can be **edited**
+  in the browser; changes take effect after a reboot, and the previous
+  version is kept as `.bak`.
 
 Uploads can't overwrite `cmdline.txt`, `config.txt` or `wpa_supplicant.conf`
 (edit them instead), or anything in `firmware`. Everything else, including
-the kernels, can be replaced, so a new build of BMCoco can be
-uploaded and started with **Reboot**. A mistake in `cmdline.txt` or
-`config.txt` can stop the Pi starting, and then needs the card in a computer
-(the `.bak` copy makes that easy).
+the kernels, can be replaced, so a new build of BMApple2 can be uploaded and
+started with **Reboot**. A mistake in `cmdline.txt` or `config.txt` can stop
+the Pi starting, and then needs the card in a computer (the `.bak` copy
+makes that easy).
 
 The web UI is open to anyone on your network. To protect it with a PIN, set
 `webui_pin=1234` in `cmdline.txt`; the browser then asks for a user name
@@ -218,36 +236,29 @@ The web UI is open to anyone on your network. To protect it with a PIN, set
 
 The network also sets the Pi's clock, so files saved on the card get the
 right date and time. Set `timezone` to your offset from UTC in minutes, for
-example `timezone=600` for UTC+10.
+example `timezone=600` for UTC+10. (The IIgs keeps its own clock, set in
+its Control Panel.)
 
 ## Options
 
 `cmdline.txt` is a single line of `name=value` options separated by spaces.
-The menu saves the options it changes to `bmcoco.cfg`, one `name=value` per
-line, and those win over `cmdline.txt`. Either file can be edited from the
-web UI.
+BMApple2's menu saves the options it changes to `bmapple2.cfg`, one
+`name=value` per line, and those win over `cmdline.txt`. Either file can be
+edited from the web UI. Everything about the emulated machine is in KEGS's
+settings (F4) and `config.kegs` instead.
 
 | Option              | Values                       | Default  | What it does |
 |---------------------|------------------------------|----------|--------------|
-| `machine`           | `coco2bus`, `cocous`, `coco3`, `coco3h`, `coco2b`, `coco`, `coco3p`, `mc10`, `dragon64`, ... | first with ROMs | Machine to emulate |
-| `autostart`         | path, e.g. `/disks/game.dsk` | none     | Disk, tape, cartridge or program to start at boot |
-| `tv_input`          | `cmp-br`, `cmp-rb`, `cmp`, `rgb` | machine's | Composite (two phases), S-Video, RGB (CoCo 3) |
-| `artifacts`         | `none`, `simple`, `5bit`, `partial`, `simulated` | XRoar's | Artifact colour renderer |
-| `picture`           | `zoomed`, `title`, `action`, `underscan` | `title` | How much border to show |
 | `aspect`            | number                       | `1.0`    | Multiplies the width of the picture |
 | `scale`             | 0.1 to 1.0                   | `1.0`    | Height of the picture as a fraction of the screen |
 | `smooth`            | `0`, `1`                     | `0`      | Bilinear filtering instead of sharp pixels |
 | `crt_shader`        | `0`, `1`                     | `0`      | CRT look (scanlines) from BMC64 |
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
 | `vsync`             | `auto`, `on`, `off`          | `auto`   | Lock frames to the display (see Display and timing) |
-| `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`    | Pi 4 only: `kms` runs the display at the CoCo's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
+| `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`    | Pi 4 only: `kms` runs the display at the IIgs's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
+| `sound`             | `0`, `1`                     | `1`      | Sound on or off |
 | `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |
-| `volume`            | 0 to 100                     | `70`     | Sound volume |
 | `audio_buffer_ms`   | 20 to 500                    | `60`     | Sound buffer; raise it if the sound breaks up |
-| `keyboard`          | `us`, `gb`, `de`, `fr`, ... (XRoar's `-kbd-lang`) | `us` | PC keyboard layout |
-| `typed_keys`        | `0`, `1`                     | `1`      | Keys type the characters printed on them (see Keyboard) |
-| `joy_right`, `joy_left` | `joy0`, `joy1`, `kjoy0` (arrow keys) | `joy0`, `joy1` | What is plugged into each joystick port |
-| `joy1_pad`, `joy2_pad` | `0` automatic, `1`-`4` a gamepad, `-1` none | `0` | Gamepad for Joystick 1 and 2 |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Joysticks on the GPIO header |
 | `enable_logging`    | `off`, `uart`, `file`        | `uart`   | Where the log goes (see Logging) |
 | `network`           | `off`, `ethernet`, `wifi`    | `off`    | Networking (see Networking and the web UI) |
@@ -256,20 +267,19 @@ web UI.
 | `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
 | `usbpowerdelay`     | milliseconds                 | `1000`   | Circle: wait for USB devices to power up |
 
-Anything else XRoar can do can go in `xroar.conf` in the root of the card,
-one option per line without the leading `-` (see XRoar's manual), for
-example `ram 64` or `machine-cpu 6309`.
+The IIgs's volume is set in its own Control Panel.
 
 ## Logging
 
-BMCoco logs what it is doing, which helps when something doesn't work:
-the version, the display and sound set up, gamepads coming and going,
-network status, and XRoar's own messages (which ROMs it found, disks
-inserted). Choose where it goes with `enable_logging` in `cmdline.txt`:
+BMApple2 logs what it is doing, which helps when something doesn't work:
+the version, the display and sound set up, the ROM it found, devices coming
+and going, network status, and KEGS's own messages (disks inserted, and
+anything it didn't like). Choose where it goes with `enable_logging` in
+`cmdline.txt`:
 
 - **UART** (the default): the serial port, GPIO14 TX and GPIO15 RX at
   115200 baud. Needs a USB serial adapter.
-- **File**: `bmcoco.log` in the root of the SD card. It starts with what
+- **File**: `bmapple2.log` in the root of the SD card. It starts with what
   was logged since boot, is written to the card every few seconds, and
   starts again at boot once it is over 1 MB. Download it from the web UI's
   file manager to send with a bug report. Writing it costs a little time
@@ -278,27 +288,33 @@ inserted). Choose where it goes with `enable_logging` in `cmdline.txt`:
 
 ## Troubleshooting
 
-**"ROMs not found"**: see ROMs. The names must match (`bas13.rom`, not
-`BASIC13.ROM`, although case doesn't matter on the card).
+**KEGS's settings screen opens by itself at boot**: it has no ROM. See
+ROMs.
+
+**"Check startup device!"**: the IIgs found no disk to start. Put one in a
+drive with F4 (see Disks).
+
+**The screen is black, or black text on black**: the IIgs's battery RAM in
+`config.kegs` may be blank (all the `bram` lines zero), for example after
+starting with a bad ROM; it then sets black text on a black background.
+Delete the `bram1` and `bram3` lines from `config.kegs` (in the web UI's
+editor) and reboot, or set the colours in the IIgs's Control Panel
+(Ctrl+Open Apple+Esc).
 
 **No picture**: uncomment `hdmi_safe=1` in `config.txt`. If that works, your
 display doesn't accept 720p at 60 Hz; try another `hdmi_mode`.
 
 **No sound over HDMI**: try `hdmi_drive=2` in `config.txt`, or
-`audio_out=hdmi` in `cmdline.txt`.
+`audio_out=hdmi` in `cmdline.txt`. Check the IIgs's volume in its Control
+Panel.
 
 **Sound breaks up**: raise `audio_buffer_ms` in `cmdline.txt`, e.g. to 100.
 
-**Keyboard or gamepad not working**: unplug it and plug it in again; devices
-can come and go while the emulator runs. Some keyboards need a longer
-`usbpowerdelay`.
+**Keyboard, mouse or gamepad not working**: unplug it and plug it in again;
+devices can come and go while the emulator runs. Some keyboards need a
+longer `usbpowerdelay`.
 
-**A game's colours are wrong**: choose the other composite phase in *Video*,
-*TV Input*.
+**The joystick doesn't move**: KEGS's *Joystick* setting (F4) should be
+*Native Joystick 1*.
 
-**A game doesn't respond to keys**: turn off *Typed Characters* in
-*Keyboard*.
-
-**A disk won't load**: Disk BASIC needs `disk11.rom` in `roms`. `DIR` lists
-the disk; `RUN"NAME"` starts a BASIC program and `LOADM"NAME":EXEC` a
-machine code one.
+**Games run too fast**: press F6 until KEGS's status line (F5) says 1 MHz.

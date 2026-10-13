@@ -1,13 +1,13 @@
 /*
- * fswrap.c - file system fixes for XRoar on Circle's FatFs.
+ * fswrap.c - file system fixes for KEGS on Circle's FatFs.
  *
- * FatFs cannot stat() the root directory of a volume, so BMCoco's file
+ * FatFs cannot stat() the root directory of a volume, so KEGS's file
  * browser would think "/" doesn't exist and refuse to go up to it. The
  * kernel is linked with --wrap=stat, so every call to stat() comes here
  * first; the root (and ".") are reported as directories, everything else
  * goes to the real stat().
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 

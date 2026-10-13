@@ -3,7 +3,7 @@
 //
 // See hvs.h.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
@@ -19,7 +19,7 @@ namespace kms {
 
 namespace {
 
-// BMCoco's part of display list memory: two kernels, then two list
+// BMApple2's part of display list memory: two kernels, then two list
 // slots of 32 words each; 96 words from one of these bases, whichever
 // doesn't overlap the firmware's list.
 const unsigned RegionWords = 2 * hvs::KernelWords + 2 + 2 * 32;

@@ -1,23 +1,24 @@
 /*
- * osd.h - BMCoco's on-screen display: menus, file browser, text entry.
+ * osd.h - BMApple2's on-screen display: menus, file browser, text entry.
  *
- * XRoar's own menus belong to its GTK, Windows and Mac front ends, so BMCoco
- * draws its own, straight into the emulator's frame buffer, in the style of
- * a CoCo text screen. While the display is open the emulation is paused.
+ * BMApple2's own menu (network, sound, video, power) is drawn straight into
+ * the emulator's frame buffer, in the style of an Apple II text screen.
+ * KEGS's configuration screen (F4: disks, ROM, machine settings) is KEGS's
+ * own. While the display is open the emulation is paused.
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 
-#ifndef BMCOCO_OSD_H_
-#define BMCOCO_OSD_H_
+#ifndef BMAPPLE2_OSD_H_
+#define BMAPPLE2_OSD_H_
 
 #include <stddef.h>
 #include <stdint.h>
 
 /* The text grid. */
 #define OSD_COLS 40
-#define OSD_ROWS 24
+#define OSD_ROWS 23
 
 /* Keys from osd_read_key(): printable characters are themselves. */
 enum {
@@ -93,4 +94,4 @@ void osd_notify(const char *text);
 /* Called by the video output each frame: draws the notification, if any. */
 void osd_draw_notification(uint16_t *fb, int pitch_px, int w, int h);
 
-#endif /* BMCOCO_OSD_H_ */
+#endif /* BMAPPLE2_OSD_H_ */

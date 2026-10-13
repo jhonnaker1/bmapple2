@@ -10,12 +10,12 @@
 //  - how long a frame takes on one core of this PC;
 //  - the pictures are written to tools/pi4scaler/out/ as PPM files.
 //
-// BMCoco's source is RGB565 (BMA800XL's is 8-bit indexed): the test card is
+// BMApple2's source is RGB565 (BMA800XL's is 8-bit indexed): the test card is
 // drawn with BMA800XL's palette and converted, so the checks are the same.
 //
 //   tools/pi4scaler/run_tests.sh
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
@@ -28,9 +28,9 @@
 #include <string.h>
 #include <vector>
 
-// BMCoco's frame buffer (src/port/platform.c) and XRoar's usual picture.
-static const int SrcW = 736, SrcH = 288;
-static const int ViewX = 0, ViewY = 0, ViewW = 640, ViewH = 240;
+// BMApple2's frame buffer (src/port/platform.c): KEGS's window, all shown.
+static const int SrcW = 704, SrcH = 462;
+static const int ViewX = 0, ViewY = 0, ViewW = 704, ViewH = 462;
 
 static int g_failed = 0;
 

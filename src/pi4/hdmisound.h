@@ -27,12 +27,12 @@
 //    MISC_CONFIG (0x7EF00008) gates HDMI1's 108 MHz audio clock (set =
 //    off).
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMCOCO_PI4_HDMISOUND_H_
-#define BMCOCO_PI4_HDMISOUND_H_
+#ifndef BMAPPLE2_PI4_HDMISOUND_H_
+#define BMAPPLE2_PI4_HDMISOUND_H_
 
 #include <circle/dmachannel.h>
 #include <circle/interrupt.h>

@@ -12,12 +12,12 @@
 // uses the four i = p, p + 8, p + 16, p + 24 for its phase p (0..7), which
 // are made to add up to 256. The HVS takes them as 11 words.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMCOCO_PI4KMS_FILTER_H_
-#define BMCOCO_PI4KMS_FILTER_H_
+#ifndef BMAPPLE2_PI4KMS_FILTER_H_
+#define BMAPPLE2_PI4KMS_FILTER_H_
 
 #include <stdint.h>
 

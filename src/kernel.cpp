@@ -1,8 +1,8 @@
 //
 // kernel.cpp
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
-// Raspberry Pi. See LICENSE for licensing details.
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
+// the Raspberry Pi. See LICENSE for licensing details.
 //
 // Parts of the USB, frame buffer and sound handling are based on BMC64.
 //
@@ -25,10 +25,10 @@
 
 extern "C" {
 // The emulator's entry point, in src/port/platform.c. Runs on core 1.
-void bmcoco_main(void);
+void bmapple2_main(void);
 }
 
-static const char FromKernel[] = "bmcoco";
+static const char FromKernel[] = "bmapple2";
 
 // Sample rate the VideoCore plays audio at.
 #define HW_SAMPLE_RATE 44100
@@ -41,8 +41,8 @@ static const char FromKernel[] = "bmcoco";
 // code that is config_0_joystickPins; its config_1 is the keyboard PCB).
 // Pins are active low with pull ups. Order: up, down, left, right, fire.
 static const unsigned kJoyGpio[2][5] = {
-    {17, 18, 27, 22, 23}, // Joystick 1 (the CoCo's right port)
-    {5, 6, 12, 13, 19},   // Joystick 2 (the CoCo's left port)
+    {17, 18, 27, 22, 23}, // Joystick 1 (paddles 0 and 1)
+    {5, 6, 12, 13, 19},   // Joystick 2 (paddles 2 and 3)
 };
 
 CKernel *CKernel::s_pThis = 0;
@@ -75,7 +75,7 @@ void CEmulatorCore::Run(unsigned nCore) {
     while (!m_bLaunch) {
       DataMemBarrier();
     }
-    bmcoco_main();
+    bmapple2_main();
   }
 #if RASPPI >= 4
   // Cores 2 and 3 help draw smoothed and CRT frames (src/pi4/video.h).
@@ -108,7 +108,8 @@ CKernel::CKernel(void)
       mAudioOut(VCHIQSoundDestinationAuto),
 #endif
       m_MergedModifiers(0),
-      m_KeyQueueHead(0), m_KeyQueueTail(0), m_bGPIOJoysticks(false) {
+      m_KeyQueueHead(0), m_KeyQueueTail(0), m_pMouse(0), m_MouseDx(0),
+      m_MouseDy(0), m_MouseButtons(0), m_bGPIOJoysticks(false) {
   s_pThis = this;
   for (unsigned i = 0; i < MAX_KEYBOARDS; i++) {
     m_pKeyboard[i] = 0;
@@ -145,8 +146,8 @@ bool CKernel::Initialize(void) {
   if (!mLogger.Initialize(&mLog)) {
     return false;
   }
-  mLogger.Write(FromKernel, LogNotice, "BMCoco " BMCOCO_VERSION " (" BMCOCO_GIT
-                ", XRoar " XROAR_VERSION ")");
+  mLogger.Write(FromKernel, LogNotice, "BMApple2 " BMAPPLE2_VERSION " (" BMAPPLE2_GIT
+                ", KEGS " KEGS_VERSION ")");
 
   if (!mTimer.Initialize()) {
     return false;
@@ -166,8 +167,8 @@ bool CKernel::Initialize(void) {
     mLogger.Write(FromKernel, LogError, "Cannot mount the SD card");
     return false;
   }
-  // Settings saved by the BMCoco menu win over cmdline.txt.
-  mOptions.LoadSettings("SD:/bmcoco.cfg");
+  // Settings saved by the BMApple2 menu win over cmdline.txt.
+  mOptions.LoadSettings("SD:/bmapple2.cfg");
 
   // Until here the log went to the serial port.
   const char *logging = mOptions.Get("enable_logging", "uart");
@@ -191,8 +192,7 @@ bool CKernel::Initialize(void) {
 
   const char *audio_out = mOptions.Get("audio_out", "auto");
 
-  // Full scale: the volume (volume= in cmdline.txt and the menu) is
-  // XRoar's, so it can change while running.
+  // Full scale: the IIgs sets its own volume (its Control Panel).
   const int volume = 100;
 
 #if RASPPI >= 4
@@ -243,6 +243,7 @@ bool CKernel::Initialize(void) {
 TShutdownMode CKernel::Run(void) {
   SetupUSBKeyboards();
   SetupUSBGamePads();
+  SetupUSBMouse();
 
   mEmulatorCore.Launch();
 
@@ -255,6 +256,7 @@ TShutdownMode CKernel::Run(void) {
     if (mUSBHCI.UpdatePlugAndPlay()) {
       SetupUSBKeyboards();
       SetupUSBGamePads();
+      SetupUSBMouse();
     }
 
     unsigned beat = s_Core1Beat;
@@ -568,7 +570,7 @@ void CKernel::GamePadStatusHandler(unsigned nDeviceIndex,
   if (y < 0) state |= HOST_PAD_UP;
   if (y > 0) state |= HOST_PAD_DOWN;
 
-  // The same stick as a position, for the CoCo's analog joysticks. Pads
+  // The same stick as a position, for the Apple II's analog paddles. Pads
   // whose D-pad is reported as axes (kPadProfiles) have no stick.
   int ax = -1;
   int ay = -1;
@@ -600,6 +602,49 @@ int CKernel::PadAxis(int pad, int axis) {
     return -1;
   }
   return m_PadAnalog[pad][axis];
+}
+
+//
+// USB mouse
+//
+
+void CKernel::SetupUSBMouse(void) {
+  if (m_pMouse != 0) {
+    return;
+  }
+  m_pMouse = (CMouseDevice *)mDeviceNameService.GetDevice("mouse1", FALSE);
+  if (m_pMouse != 0) {
+    m_pMouse->RegisterRemovedHandler(MouseRemovedHandler);
+    m_pMouse->RegisterStatusHandler(MouseStatusHandler);
+    mLogger.Write(FromKernel, LogNotice, "Mouse connected");
+  }
+}
+
+void CKernel::MouseStatusHandler(unsigned nButtons, int nDisplacementX,
+                                 int nDisplacementY, int nWheelMove) {
+  CKernel *k = s_pThis;
+  if (k == 0) {
+    return;
+  }
+  __atomic_add_fetch(&k->m_MouseDx, nDisplacementX, __ATOMIC_RELAXED);
+  __atomic_add_fetch(&k->m_MouseDy, nDisplacementY, __ATOMIC_RELAXED);
+  __atomic_store_n(&k->m_MouseButtons, (int)(nButtons & 7), __ATOMIC_RELEASE);
+}
+
+void CKernel::MouseRemovedHandler(CDevice *pDevice, void *pContext) {
+  CKernel *k = s_pThis;
+  if (k == 0) {
+    return;
+  }
+  k->m_pMouse = 0;
+  k->m_MouseButtons = 0;
+}
+
+int CKernel::MouseRead(int *dx, int *dy, int *buttons) {
+  *dx = __atomic_exchange_n(&m_MouseDx, 0, __ATOMIC_RELAXED);
+  *dy = __atomic_exchange_n(&m_MouseDy, 0, __ATOMIC_RELAXED);
+  *buttons = __atomic_load_n(&m_MouseButtons, __ATOMIC_ACQUIRE);
+  return m_pMouse != 0;
 }
 
 //
@@ -998,6 +1043,10 @@ unsigned host_key_modifiers(void) { return CKernel::Get()->KeyModifiers(); }
 int host_pad_state(int pad) { return CKernel::Get()->PadState(pad); }
 
 int host_pad_axis(int pad, int axis) { return CKernel::Get()->PadAxis(pad, axis); }
+
+int host_mouse_read(int *dx, int *dy, int *buttons) {
+  return CKernel::Get()->MouseRead(dx, dy, buttons);
+}
 
 int host_gpio_joystick(int port) { return CKernel::Get()->GpioJoystick(port); }
 

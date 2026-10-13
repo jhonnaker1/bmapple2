@@ -1,5 +1,5 @@
 // Dashboard view and the Pi/system controls: status polling, hardware and
-// storage meters, and the reboot / shut down / hard reset / disable-web-UI
+// storage meters, and the reboot / shut down / restart / disable-web-UI
 // actions.
 
 import { $, fmtUptime, fmtKB } from "./util.js";
@@ -102,17 +102,17 @@ async function pollStatus() {
     $("i-ip").textContent = s.ip || "—";
     setMachine(s);
     $("i-machine").textContent = s.machine ? machineDisplayName() : "—";
-    $("qa-reset-sub").textContent = "Reset the " + machineDisplayName();
+    $("qa-reset-sub").textContent = "Start the " + machineDisplayName() + " again";
     $("i-model").textContent = s.model || "—";
     $("i-net").textContent = s.net_text || ("status " + s.net_status);
     $("i-ver").textContent = s.version
-      ? "BMCoco " + s.version + (s.git ? " (" + s.git + ")" : "") : "—";
+      ? "BMApple2 " + s.version + (s.git ? " (" + s.git + ")" : "") : "—";
     $("i-uptime").textContent = fmtUptime(s.uptime_secs);
 
     if (rebooting) {
       rebooting = false;
       $("action-msg").className = "msg";
-      $("action-msg").textContent = "BMCoco is back online.";
+      $("action-msg").textContent = "BMApple2 is back online.";
       $("qa-reboot").disabled = false;
       $("nav-reboot").disabled = false;
     }
@@ -166,20 +166,20 @@ export async function rebootNow() {
   } catch (e) {
     /* the connection usually drops as it reboots; that is expected */
   }
-  $("action-msg").textContent = "BMCoco is rebooting. This page will reconnect automatically.";
+  $("action-msg").textContent = "BMApple2 is rebooting. This page will reconnect automatically.";
   scheduleStatus(POLL_FAIL_MS);
 }
 
 async function doReboot() {
-  if (!confirm("Reboot BMCoco now? Any unsaved emulator state will be lost.")) return;
+  if (!confirm("Reboot BMApple2 now? Any unsaved emulator state will be lost.")) return;
   await rebootNow();
 }
 
 async function doShutdown() {
   if (!confirm(
-    "Shut down BMCoco now?\n\n" +
+    "Shut down BMApple2 now?\n\n" +
     "Disk images are saved first. Any other unsaved emulator state is lost, " +
-    "and BMCoco stays off until its power is switched off and on again.")) return;
+    "and BMApple2 stays off until its power is switched off and on again.")) return;
   for (const id of ["qa-shutdown", "nav-shutdown", "qa-reboot", "nav-reboot"]) {
     $(id).disabled = true;
   }
@@ -203,22 +203,23 @@ async function doShutdown() {
   pollTimer = null;
   setConn(false, "Off");
   $("action-msg").textContent =
-    "BMCoco is shutting down. Once its screen goes blank it is safe to " +
+    "BMApple2 is shutting down. Once its screen goes blank it is safe to " +
     "remove power. Reload this page after switching it on again.";
 }
 
 async function doHardReset() {
   if (!confirm(
-    "Hard reset the emulated machine now?\n\n")) return;
+    "Restart the emulated machine now, as switching it off and on does?\n\n" +
+    "Anything not saved to disk is lost.")) return;
   $("qa-reset").disabled = true;
   $("action-msg").className = "msg";
-  $("action-msg").textContent = "Sending hard reset…";
+  $("action-msg").textContent = "Restarting…";
   try {
     await api.hardReset();
-    $("action-msg").textContent = "Machine reset.";
+    $("action-msg").textContent = "Machine restarted.";
   } catch (e) {
     $("action-msg").className = "msg err";
-    $("action-msg").textContent = "Hard reset failed — " + e.message;
+    $("action-msg").textContent = "Restart failed — " + e.message;
   }
   $("qa-reset").disabled = false;
 }

@@ -1,14 +1,14 @@
 #!/bin/bash
 #
-# Source this file to put the Arm GNU Toolchain used by BMCoco on PATH.
+# Source this file to put the Arm GNU Toolchain used by BMApple2 on PATH.
 #
 #   source ./get_gnu_toolchain.sh
-#   BMCOCO_AARCH=64 source ./get_gnu_toolchain.sh   (64-bit, for the Pi 4)
+#   BMAPPLE2_AARCH=64 source ./get_gnu_toolchain.sh   (64-bit, for the Pi 4)
 #
-# The pinned release is downloaded into ~/.cache/bmcoco/toolchains the
+# The pinned release is downloaded into ~/.cache/bmapple2/toolchains the
 # first time. A matching toolchain already on PATH, or in $ARM_HOME
 # ($AARCH64_HOME for 64-bit), is used as it is. Set
-# BMCOCO_ALLOW_ANY_TOOLCHAIN=1 to accept whatever arm-none-eabi-gcc (or
+# BMAPPLE2_ALLOW_ANY_TOOLCHAIN=1 to accept whatever arm-none-eabi-gcc (or
 # aarch64-none-elf-gcc) is on PATH when the pinned release cannot be
 # downloaded.
 #
@@ -19,7 +19,7 @@
 
 TOOLCHAIN_VERSION=15.2.1
 TOOLCHAIN_RELEASE=15.2.rel1
-if [ "${BMCOCO_AARCH:-32}" = "64" ]
+if [ "${BMAPPLE2_AARCH:-32}" = "64" ]
 then
     TOOLCHAIN_TARGET=aarch64-none-elf
     TOOLCHAIN_HOME_VAR=AARCH64_HOME
@@ -36,8 +36,8 @@ esac
 TOOLCHAIN_NAME=arm-gnu-toolchain-${TOOLCHAIN_RELEASE}-${TOOLCHAIN_HOST}-${TOOLCHAIN_TARGET}
 TOOLCHAIN_ARCHIVE=${TOOLCHAIN_NAME}.tar.xz
 TOOLCHAIN_URL=https://gitlab.arm.com/api/v4/projects/tooling%2Fgnu-toolchains-for-arm/packages/generic/gnu-toolchain/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_ARCHIVE}
-TOOLCHAIN_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/bmcoco/toolchains
-TOOLCHAIN_HOME=${BMCOCO_TOOLCHAIN_HOME:-$TOOLCHAIN_CACHE/$TOOLCHAIN_NAME}
+TOOLCHAIN_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/bmapple2/toolchains
+TOOLCHAIN_HOME=${BMAPPLE2_TOOLCHAIN_HOME:-$TOOLCHAIN_CACHE/$TOOLCHAIN_NAME}
 
 toolchain_is_valid()
 {
@@ -108,12 +108,12 @@ fi
 if toolchain_is_valid "$TOOLCHAIN_HOME"
 then
     toolchain_use "$TOOLCHAIN_HOME"
-elif [ "${BMCOCO_ALLOW_ANY_TOOLCHAIN:-0}" = "1" ] && command -v $TOOLCHAIN_TARGET-gcc >/dev/null 2>&1
+elif [ "${BMAPPLE2_ALLOW_ANY_TOOLCHAIN:-0}" = "1" ] && command -v $TOOLCHAIN_TARGET-gcc >/dev/null 2>&1
 then
     echo "WARNING: Arm GNU Toolchain $TOOLCHAIN_VERSION ($TOOLCHAIN_TARGET) is not available." >&2
     toolchain_use "$(dirname "$(dirname "$(readlink -f "$(command -v $TOOLCHAIN_TARGET-gcc)")")")"
 else
     echo "Arm GNU Toolchain $TOOLCHAIN_VERSION ($TOOLCHAIN_TARGET) could not be installed." >&2
-    echo "Set BMCOCO_ALLOW_ANY_TOOLCHAIN=1 to build with the $TOOLCHAIN_TARGET-gcc on PATH." >&2
+    echo "Set BMAPPLE2_ALLOW_ANY_TOOLCHAIN=1 to build with the $TOOLCHAIN_TARGET-gcc on PATH." >&2
     return 1 2>/dev/null || exit 1
 fi

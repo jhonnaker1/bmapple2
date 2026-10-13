@@ -39,7 +39,7 @@ jobs:
       - name: Cache Arm GNU Toolchain
         uses: actions/cache@v6
         with:
-          path: ~/.cache/bmcoco/toolchains
+          path: ~/.cache/bmapple2/toolchains
           key: arm-gnu-toolchain-15.2.rel1-arm-none-eabi-aarch64-none-elf
 
       - name: Test the emulator port on the PC
@@ -57,12 +57,12 @@ jobs:
         run: ./check_release_files.sh --release
 
       - name: Zip the SD card files
-        run: cd build/sdcard && zip -r "../../bmcoco-${{ github.ref_name }}.zip" .
+        run: cd build/sdcard && zip -r "../../bmapple2-${{ github.ref_name }}.zip" .
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
         with:
-          name: BMCoco ${{ github.ref_name }}
-          files: bmcoco-${{ github.ref_name }}.zip
+          name: BMApple2 ${{ github.ref_name }}
+          files: bmapple2-${{ github.ref_name }}.zip
           generate_release_notes: false
           draft: true

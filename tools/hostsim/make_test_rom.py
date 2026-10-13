@@ -1,203 +1,221 @@
 #!/usr/bin/env python3
 #
-# Makes stand-in CoCo ROMs for the host simulator's tests.
+# Makes a stand-in Apple II ROM for the host simulator's tests.
 #
-# The real Color BASIC ROMs are copyrighted, so the tests can't use them.
-# This writes an 8K "bas13.rom" (Color BASIC 1.3's name, which XRoar looks
-# for) holding a small 6809 program, and an empty "extbas11.rom", into the
-# directory given. The program:
+# The real Apple ROMs are copyrighted, so the tests can't use them. This
+# writes a 32K "ROM" into the directory given: the size of an Apple IIe ROM
+# file, so KEGS runs it as a IIe, with the last 16K at $C000-$FFFF (KEGS's
+# IIe ROM layout; see its doc/README.ROM.files.txt). It holds a small 6502
+# program that, on the 40 column text screen:
 #
-#   - prints "BMCOCO TEST ROM" on the 32x16 text screen,
-#   - shows the keyboard matrix on row 10 (one character per column, which
-#     changes while a key in that column is down),
-#   - shows the right joystick's X and Y (as read with the 6 bit DAC and
-#     the comparator) as characters on row 12, and the buttons,
-#   - counts frames in the top right corner,
-#   - toggles the single bit sound output every frame (a 30 Hz buzz).
+#   - counts frames (in hex) at the top left, on row 0;
+#   - shows on row 6 a block while any key is down ($C010), and one for each
+#     of buttons 0 and 1 ($C061, $C062);
+#   - shows on row 7 paddles 0 and 1 (in hex, read as the ROM's PREAD does);
+#   - clicks the speaker ($C030) every frame, a short buzz.
+#
+# Frames are counted at the start of each vertical blank ($C019), so a
+# screenshot taken a frame later always differs at the top.
 #
 #   python3 make_test_rom.py DIR
 #
 
 import sys
 
+SPACE = 0xa0          # normal space
+BLOCK = 0x20          # inverse space: a solid block
+ROW0, ROW6, ROW7 = 0x400, 0x700, 0x780
+
 
 class Asm:
+    """Just enough of a 6502 assembler: the opcodes below, with labels."""
+
     def __init__(self, origin):
         self.origin = origin
         self.code = bytearray()
         self.labels = {}
-        self.fixups = []  # (offset, label, kind)
+        self.fixups = []  # (offset, label, 'abs' or 'rel')
 
-    @property
-    def pc(self):
+    def here(self):
         return self.origin + len(self.code)
 
     def label(self, name):
-        self.labels[name] = self.pc
+        self.labels[name] = self.here()
 
-    def emit(self, *data):
-        for d in data:
-            self.code.append(d & 0xff)
+    def byte(self, *values):
+        self.code.extend(values)
 
     def word(self, value):
-        self.emit(value >> 8, value)
+        if isinstance(value, str):
+            self.fixups.append((len(self.code), value, 'abs'))
+            value = 0
+        self.code.extend((value & 0xff, value >> 8))
 
-    def ref16(self, label):
-        self.fixups.append((len(self.code), label, 'abs'))
-        self.word(0)
+    def op(self, opcode, operand=None, size=0):
+        self.code.append(opcode)
+        if size == 1:
+            self.code.append(operand)
+        elif size == 2:
+            self.word(operand)
 
-    def branch(self, opcode, label):
-        self.emit(opcode)
-        self.fixups.append((len(self.code), label, 'rel8'))
-        self.emit(0)
+    def branch(self, opcode, target):
+        self.code.append(opcode)
+        self.fixups.append((len(self.code), target, 'rel'))
+        self.code.append(0)
 
-    def resolve(self):
-        for offset, label, kind in self.fixups:
-            target = self.labels[label]
+    def finish(self):
+        for offset, name, kind in self.fixups:
+            target = self.labels[name]
             if kind == 'abs':
-                self.code[offset] = target >> 8
-                self.code[offset + 1] = target & 0xff
+                self.code[offset:offset + 2] = bytes((target & 0xff, target >> 8))
             else:
-                rel = target - (self.origin + offset + 1)
-                if not -128 <= rel <= 127:
-                    raise ValueError('branch to %s out of range' % label)
-                self.code[offset] = rel & 0xff
+                delta = target - (self.origin + offset + 1)
+                assert -128 <= delta <= 127, name
+                self.code[offset] = delta & 0xff
+        return bytes(self.code)
 
 
-SCREEN = 0x0400
+def program():
+    a = Asm(0xf000)
+    lda_imm = lambda v: a.op(0xa9, v, 1)
+    ldx_imm = lambda v: a.op(0xa2, v, 1)
+    ldy_imm = lambda v: a.op(0xa0, v, 1)
+    lda_abs = lambda v: a.op(0xad, v, 2)
+    sta_abs = lambda v: a.op(0x8d, v, 2)
+    sta_zp = lambda v: a.op(0x85, v, 1)
+    and_imm = lambda v: a.op(0x29, v, 1)
+    eor_imm = lambda v: a.op(0x49, v, 1)
+    jsr = lambda v: a.op(0x20, v, 2)
 
-a = Asm(0xA000)
-a.label('start')
-a.emit(0x1A, 0x50)                    # ORCC #$50      no interrupts
-a.emit(0x10, 0xCE); a.word(0x0F00)    # LDS #$0F00    (the SAM starts in 4K mode)
-# PIA0: port A inputs (keyboard rows, comparator), port B outputs (columns)
-a.emit(0x7F); a.word(0xFF01)          # CLR $FF01      CRA: DDR
-a.emit(0x7F); a.word(0xFF00)          # CLR $FF00      DDRA = inputs
-a.emit(0x86, 0x04)                    # LDA #$04
-a.emit(0xB7); a.word(0xFF01)          # STA $FF01      CRA: data
-a.emit(0x7F); a.word(0xFF03)          # CLR $FF03      CRB: DDR
-a.emit(0x86, 0xFF)                    # LDA #$FF
-a.emit(0xB7); a.word(0xFF02)          # STA $FF02      DDRB = outputs
-a.emit(0x86, 0x04)                    # LDA #$04
-a.emit(0xB7); a.word(0xFF03)          # STA $FF03      CRB: data
-# PIA1: port A bits 2-7 DAC out, bit 1 printer; port B: VDG and sound
-a.emit(0x7F); a.word(0xFF21)          # CLR $FF21
-a.emit(0x86, 0xFE)                    # LDA #$FE
-a.emit(0xB7); a.word(0xFF20)          # STA $FF20      DDRA
-a.emit(0x86, 0x04)                    # LDA #$04
-a.emit(0xB7); a.word(0xFF21)          # STA $FF21
-a.emit(0x7F); a.word(0xFF23)          # CLR $FF23
-a.emit(0x86, 0xFA)                    # LDA #$FA       VDG bits 3-7, sound bit 1
-a.emit(0xB7); a.word(0xFF22)          # STA $FF22      DDRB
-a.emit(0x86, 0x04)                    # LDA #$04
-a.emit(0xB7); a.word(0xFF23)          # STA $FF23
-a.emit(0x7F); a.word(0xFF22)          # CLR $FF22      alphanumeric, CSS 0
-# SAM: display from $0400 (F1 set)
-a.emit(0xB7); a.word(0xFFC9)          # STA $FFC9
-# Clear the screen to (green) spaces
-a.emit(0x8E); a.word(SCREEN)          # LDX #$0400
-a.emit(0x86, 0x60)                    # LDA #$60
-a.label('clear')
-a.emit(0xA7, 0x80)                    # STA ,X+
-a.emit(0x8C); a.word(SCREEN + 512)    # CMPX #$0600
-a.branch(0x26, 'clear')               # BNE clear
-# The message on row 2
-a.emit(0x8E); a.ref16('msg')          # LDX #msg
-a.emit(0x10, 0x8E); a.word(SCREEN + 2 * 32 + 8)  # LDY
-a.label('print')
-a.emit(0xA6, 0x80)                    # LDA ,X+
-a.branch(0x27, 'loop')                # BEQ loop
-a.emit(0xA7, 0xA0)                    # STA ,Y+
-a.branch(0x20, 'print')               # BRA print
+    # Show A's top bit at ADDR: a block when it is set.
+    def show_bit(addr):
+        and_imm(0x80)
+        eor_imm(SPACE)        # $80 -> $20 (block), $00 -> $A0 (space)
+        sta_abs(addr)
 
-a.label('loop')
-# Keyboard: one column at a time, rows as a character
-a.emit(0xC6, 0xFE)                    # LDB #$FE
-a.emit(0x8E); a.word(SCREEN + 10 * 32 + 12)  # LDX
-a.label('col')
-a.emit(0xF7); a.word(0xFF02)          # STB $FF02
-a.emit(0xB6); a.word(0xFF00)          # LDA $FF00
-a.emit(0x84, 0x7F)                    # ANDA #$7F
-a.emit(0xA7, 0x80)                    # STA ,X+
-a.emit(0x1A, 0x01)                    # ORCC #$01      carry in
-a.emit(0x59)                          # ROLB
-a.emit(0xC1, 0xFF)                    # CMPB #$FF
-a.branch(0x26, 'col')                 # BNE col
-a.emit(0x86, 0xFF)                    # LDA #$FF
-a.emit(0xB7); a.word(0xFF02)          # STA $FF02      no column
+    # Show A as two hex digits at ADDR.
+    def show_hex(addr):
+        a.op(0x48)                    # PHA
+        lda_imm(addr & 0xff)
+        sta_zp(0x02)
+        lda_imm(addr >> 8)
+        sta_zp(0x03)
+        a.op(0x68)                    # PLA
+        jsr('hex')
 
-# Joystick buttons: rows 0 and 1 with no column selected (active low)
-a.emit(0xB6); a.word(0xFF00)          # LDA $FF00
-a.emit(0x84, 0x03)                    # ANDA #$03
-a.emit(0x8B, 0x30)                    # ADDA #'0'      '0'-'3'
-a.emit(0xB7); a.word(SCREEN + 12 * 32 + 20)
+    a.label('reset')
+    a.op(0x78)                        # SEI
+    a.op(0xd8)                        # CLD
+    ldx_imm(0xff)
+    a.op(0x9a)                        # TXS
+    for switch in (0xc000, 0xc00c, 0xc00e):   # 80STORE, 80COL, ALTCHAR off
+        sta_abs(switch)
+    lda_abs(0xc051)                   # text
+    lda_abs(0xc054)                   # page 1
+    lda_imm(SPACE)
+    ldx_imm(0)
+    a.label('clear')
+    for page in (0x400, 0x500, 0x600, 0x700):
+        a.op(0x9d, page, 2)           # STA page,X
+    a.op(0xe8)                        # INX
+    a.branch(0xd0, 'clear')           # BNE
+    lda_imm(0)
+    sta_zp(0x00)
 
-# Joystick: right X (mux 0) and Y (mux 1). Successive approximation with
-# the 6 bit DAC: $FF20 bits 2-7, comparator in $FF00 bit 7.
-for mux, column in ((0, 12), (1, 16)):
-    # Select the axis: PIA0 CRA bit 3 (SEL1, low bit), CRB bit 3 (SEL2)
-    a.emit(0x86, 0x3C if mux else 0x34)   # LDA: CA2 out, high/low; data
-    a.emit(0xB7); a.word(0xFF01)          # STA $FF01
-    a.emit(0x86, 0x34)                    # LDA #$34      SEL2 low
-    a.emit(0xB7); a.word(0xFF03)          # STA $FF03
-    a.emit(0xC6, 0x00)                    # LDB #0        result
-    a.emit(0x86, 0x80)                    # LDA #$80      trial bit
-    a.label('bit%d' % mux)
-    a.emit(0x34, 0x02)                    # PSHS A
-    a.emit(0x34, 0x04)                    # PSHS B
-    a.emit(0xAA, 0xE4)                    # ORA ,S        trial = B | bit
-    a.emit(0x34, 0x02)                    # PSHS A
-    a.emit(0x84, 0xFC)                    # ANDA #$FC
-    a.emit(0xB7); a.word(0xFF20)          # STA $FF20     DAC
-    a.emit(0x12, 0x12, 0x12)              # NOP x3        settle
-    a.emit(0xF6); a.word(0xFF00)          # LDB $FF00
-    a.emit(0x35, 0x02)                    # PULS A        trial
-    a.emit(0x5D)                          # TSTB          bit 7: joystick >= DAC
-    a.emit(0x35, 0x04)                    # PULS B        result
-    a.branch(0x2A, 'skip%d' % mux)        # BPL skip      below: keep result
-    a.emit(0x1F, 0x89)                    # TFR A,B       result = trial
-    a.label('skip%d' % mux)
-    a.emit(0x35, 0x02)                    # PULS A        bit
-    a.emit(0x44)                          # LSRA
-    a.emit(0x81, 0x02)                    # CMPA #$02
-    a.branch(0x26, 'bit%d' % mux)         # BNE bit       6 bits: $80..$04
-    # Show B>>2 (0-63) as a character
-    a.emit(0x54)                          # LSRB
-    a.emit(0x54)                          # LSRB
-    a.emit(0xF7); a.word(SCREEN + 12 * 32 + column)
-a.emit(0x86, 0x34)                        # LDA #$34      SEL1 low again
-a.emit(0xB7); a.word(0xFF01)
-a.emit(0x86, 0x04)                        # LDA #$04
-a.emit(0xB7); a.word(0xFF03)              # CRB: back to plain data
+    a.label('loop')
+    # The start of the next vertical blank (on a IIe, $C019's top bit is
+    # set outside it).
+    a.label('wait_display')
+    lda_abs(0xc019)
+    a.branch(0x10, 'wait_display')    # BPL: in the blank still
+    a.label('wait_blank')
+    lda_abs(0xc019)
+    a.branch(0x30, 'wait_blank')      # BMI: not yet
 
-# Wait for field sync (PIA0 CB1: CRB bit 7), then clear the flag
-a.label('wait')
-a.emit(0xB6); a.word(0xFF03)          # LDA $FF03
-a.branch(0x2A, 'wait')                # BPL wait
-a.emit(0xB6); a.word(0xFF02)          # LDA $FF02
-a.emit(0x7C); a.word(SCREEN + 31)     # INC $041F      frame counter
-a.emit(0xB6); a.word(0xFF22)          # LDA $FF22
-a.emit(0x88, 0x02)                    # EORA #$02      sound bit
-a.emit(0xB7); a.word(0xFF22)          # STA $FF22
-a.emit(0x7E); a.ref16('loop')         # JMP loop
+    a.op(0xe6, 0x00, 1)               # INC frames
+    a.op(0xa5, 0x00, 1)               # LDA frames
+    show_hex(ROW0)
 
-a.label('msg')
-for c in 'BMCOCO TEST ROM':
-    a.emit(ord(c) if c != ' ' else 0x60)
-a.emit(0)
+    lda_abs(0xc010)                   # any key down (and clear the strobe)
+    show_bit(ROW6)
+    lda_abs(0xc061)
+    show_bit(ROW6 + 2)
+    lda_abs(0xc062)
+    show_bit(ROW6 + 4)
 
-a.resolve()
+    for paddle in (0, 1):
+        ldx_imm(paddle)
+        jsr('pread')
+        a.op(0x98)                    # TYA
+        show_hex(ROW7 + 3 * paddle)
 
-rom = bytearray([0xFF] * 0x2000)
-rom[:len(a.code)] = a.code
-# Vectors: $FFF0-$FFFF read from $BFF0-$BFFF
-for vec in range(0x1FF2, 0x2000, 2):
-    rom[vec] = 0xA0
-    rom[vec + 1] = 0x00
+    # A buzz: the speaker clicked 32 times.
+    ldx_imm(32)
+    a.label('click')
+    lda_abs(0xc030)
+    ldy_imm(40)
+    a.label('click_wait')
+    a.op(0x88)                        # DEY
+    a.branch(0xd0, 'click_wait')
+    a.op(0xca)                        # DEX
+    a.branch(0xd0, 'click')
+    a.op(0x4c, 'loop', 2)             # JMP
+
+    # Paddle X into Y, 0-255: the Apple II ROM's PREAD.
+    a.label('pread')
+    lda_abs(0xc070)
+    ldy_imm(0)
+    a.op(0xea)                        # NOP
+    a.op(0xea)
+    a.label('pread_loop')
+    a.op(0xbd, 0xc064, 2)             # LDA $C064,X
+    a.branch(0x10, 'pread_done')      # BPL
+    a.op(0xc8)                        # INY
+    a.branch(0xd0, 'pread_loop')      # BNE
+    a.op(0x88)                        # DEY
+    a.label('pread_done')
+    a.op(0x60)                        # RTS
+
+    # A as two hex digits at ($02).
+    a.label('hex')
+    a.op(0x48)                        # PHA
+    for _ in range(4):
+        a.op(0x4a)                    # LSR A
+    a.op(0xaa)                        # TAX
+    a.op(0xbd, 'digits', 2)           # LDA digits,X
+    ldy_imm(0)
+    a.op(0x91, 0x02, 1)               # STA ($02),Y
+    a.op(0x68)                        # PLA
+    and_imm(0x0f)
+    a.op(0xaa)                        # TAX
+    a.op(0xbd, 'digits', 2)
+    a.op(0xc8)                        # INY
+    a.op(0x91, 0x02, 1)
+    a.op(0x60)                        # RTS
+
+    a.label('digits')
+    a.byte(*(ord(c) | 0x80 for c in '0123456789ABCDEF'))
+
+    a.label('interrupt')
+    a.op(0x40)                        # RTI
+    return a
+
+
+def rom():
+    a = program()
+    code = a.finish()
+    image = bytearray(32 * 1024)
+    # $C000-$FFFF is the last 16K of the file.
+    start = 0x4000 + (a.origin - 0xc000)
+    image[start:start + len(code)] = code
+    vectors = 0x4000 + (0xfffa - 0xc000)
+    for i, name in enumerate(('interrupt', 'reset', 'interrupt')):
+        address = a.labels[name]
+        image[vectors + 2 * i:vectors + 2 * i + 2] = bytes((address & 0xff, address >> 8))
+    return bytes(image)
+
 
 out = sys.argv[1] if len(sys.argv) > 1 else '.'
-with open(out + '/bas13.rom', 'wb') as f:
-    f.write(rom)
-with open(out + '/extbas11.rom', 'wb') as f:
-    f.write(bytes([0xFF] * 0x2000))
-print('%d bytes of code' % len(a.code))
+with open(out + '/ROM', 'wb') as f:
+    f.write(rom())
+print('wrote ' + out + '/ROM')

@@ -1,10 +1,10 @@
 /*
- * host_sim.c - runs the BMCoco emulator port on a PC for testing.
+ * host_sim.c - runs the BMApple2 emulator port on a PC for testing.
  *
  * Implements src/host.h with a simulated display, sound output and input,
- * so XRoar and the port in src/port/ can be tested without a Raspberry Pi.
+ * so KEGS and the port in src/port/ can be tested without a Raspberry Pi.
  * Time is virtual: each display refresh advances the clock by one frame of
- * a 60 Hz (or BMCOCO_REFRESH Hz) display, so tests run as fast as the PC
+ * a 60 Hz (or BMAPPLE2_REFRESH Hz) display, so tests run as fast as the PC
  * allows.
  *
  * A script on standard input drives the test, one command per line:
@@ -14,18 +14,19 @@
  *   <frame> pad <n> <bits>         set gamepad n to HOST_PAD_* bits
  *   <frame> axis <n> <x> <y>       gamepad n's analog stick (0-65535, -1 none)
  *   <frame> gpio <port> <bits>     GPIO joystick port to HOST_JOY_* bits
+ *   <frame> mouse <dx> <dy> <buttons>  the mouse moves (buttons: bit 0 left)
  *   <frame> shot <file.ppm>        save the visible screen
  *   <frame> audio                  print audio statistics
  *   <frame> webui <reboot|coldstart>  a request from the web UI
  *   <frame> run <path>             the web UI starts a file
  *   <frame> quit                   end the test
  *
- * With BMCOCO_LIVE=PORT it runs in real time instead, with no script: the
+ * With BMAPPLE2_LIVE=PORT it runs in real time instead, with no script: the
  * screen, keyboard, gamepads and sound are in a web page at
  * http://127.0.0.1:PORT/ (live.c, live.html). tools/hostsim/live.sh starts it.
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
- * Raspberry Pi. See LICENSE for licensing details.
+ * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
+ * the Raspberry Pi. See LICENSE for licensing details.
  */
 
 #include <stdio.h>
@@ -38,8 +39,8 @@
 #include "live.h"
 
 /* From src/port/platform.c, called by the web UI on the Pi. */
-void bmcoco_request_power(int power_off);
-void bmcoco_request_coldstart(void);
+void bmapple2_request_power(int power_off);
+void bmapple2_request_coldstart(void);
 void emu_autostart_interrupt(const char *path);
 
 /* ---- Options ---------------------------------------------------------------- */
@@ -47,7 +48,7 @@ void emu_autostart_interrupt(const char *path);
 static const char *option(const char *name)
 {
 	static char buf[1024];
-	const char *cmdline = getenv("BMCOCO_CMDLINE");
+	const char *cmdline = getenv("BMAPPLE2_CMDLINE");
 	char *p, *save = NULL;
 	size_t n = strlen(name);
 	if (cmdline == NULL)
@@ -60,8 +61,8 @@ static const char *option(const char *name)
 	return NULL;
 }
 
-/* Settings changed by the menu, which win over BMCOCO_CMDLINE, as
-   bmcoco.cfg does on the Pi. Saved to ./bmcoco.cfg. */
+/* Settings changed by the menu, which win over BMAPPLE2_CMDLINE, as
+   bmapple2.cfg does on the Pi. Saved to ./bmapple2.cfg. */
 static char set_name[48][24], set_value[48][72];
 static int n_set;
 
@@ -82,7 +83,7 @@ int host_option_set(const char *name, const char *value)
 
 int host_options_save(void)
 {
-	FILE *f = fopen("bmcoco.cfg", "w");
+	FILE *f = fopen("bmapple2.cfg", "w");
 	int i;
 	if (f == NULL)
 		return 0;
@@ -292,6 +293,7 @@ static unsigned char key_state[256];
 static int pads[HOST_PADS] = {-1, -1, -1, -1};
 static int pad_axes[HOST_PADS][2] = {{-1, -1}, {-1, -1}, {-1, -1}, {-1, -1}};
 static int gpio[2];
+static int mouse_dx, mouse_dy, mouse_buttons, mouse_seen;
 
 static void push_key(int usage, int pressed)
 {
@@ -333,6 +335,26 @@ int host_pad_axis(int pad, int axis)
 }
 
 int host_gpio_joystick(int port) { return port >= 0 && port < 2 ? gpio[port] : 0; }
+
+int host_mouse_read(int *dx, int *dy, int *buttons)
+{
+	if (!mouse_seen)
+		return 0;
+	*dx = mouse_dx;
+	*dy = mouse_dy;
+	*buttons = mouse_buttons;
+	mouse_dx = mouse_dy = 0;
+	return 1;
+}
+
+/* For live.c */
+void sim_mouse(int dx, int dy, int buttons)
+{
+	mouse_dx += dx;
+	mouse_dy += dy;
+	mouse_buttons = buttons;
+	mouse_seen = 1;
+}
 
 /* US layout: character to (usage, shift). */
 static int char_usage(int c, int *shift)
@@ -443,6 +465,10 @@ static void run_script(void)
 			sscanf(line + n, "%d %d %d", &pad, &x, &y);
 			pad_axes[pad][0] = x;
 			pad_axes[pad][1] = y;
+		} else if (strcmp(cmd, "mouse") == 0) {
+			int dx, dy, b;
+			sscanf(line + n, "%d %d %d", &dx, &dy, &b);
+			sim_mouse(dx, dy, b);
 		} else if (strcmp(cmd, "gpio") == 0) {
 			int port, bits;
 			sscanf(line + n, "%d %i", &port, &bits);
@@ -453,9 +479,9 @@ static void run_script(void)
 			screenshot(line + n + 1);
 		} else if (strcmp(cmd, "webui") == 0) {
 			if (strstr(line + n, "reboot"))
-				bmcoco_request_power(0);
+				bmapple2_request_power(0);
 			else if (strstr(line + n, "coldstart"))
-				bmcoco_request_coldstart();
+				bmapple2_request_coldstart();
 		} else if (strcmp(cmd, "audio") == 0) {
 			fprintf(stderr, "[sim] frame %ld: audio written %ld frames in %ld writes, "
 			        "queue before write min %.0f, after write max %.0f, underruns %ld, "
@@ -532,7 +558,7 @@ void host_power_off(void)
 
 int host_network_address(char *address, unsigned size)
 {
-	const char *ip = getenv("BMCOCO_IP");
+	const char *ip = getenv("BMAPPLE2_IP");
 	if (ip == NULL || frame < 100)
 		return 0;
 	snprintf(address, size, "%s", ip);
@@ -548,17 +574,17 @@ void host_network_status(char *text, unsigned size)
 		snprintf(text, size, "Off");
 }
 
-/* BMCOCO_WIFI=1 pretends Wi-Fi is running, with a few networks around. */
+/* BMAPPLE2_WIFI=1 pretends Wi-Fi is running, with a few networks around. */
 int host_wifi_scan(struct host_wifi_ap *aps, int max)
 {
 	static const struct host_wifi_ap found[] = {
 		{"CoffeeShop", -71, 0},
 		{"StdWiFiPoint", -48, 1},
 		{"A very long network name, 32 ch", -80, 1},
-		{"CoCoNet", -60, 0},
+		{"AppleNet", -60, 0},
 	};
 	int i, n = (int) (sizeof(found) / sizeof(found[0]));
-	if (getenv("BMCOCO_WIFI") == NULL)
+	if (getenv("BMAPPLE2_WIFI") == NULL)
 		return -1;
 	for (i = 0; i < n && i < max; i++)
 		aps[i] = found[i];
@@ -602,7 +628,7 @@ int host_set_log_destination(int destination)
 	return 1;
 }
 
-extern void bmcoco_main(void);
+extern void bmapple2_main(void);
 
 /* For live.c */
 void sim_push_key(int usage, int pressed)
@@ -629,18 +655,18 @@ const uint16_t *sim_screen(int *w, int *h, int *pitch)
 
 int main(void)
 {
-	const char *r = getenv("BMCOCO_LIVE");
+	const char *r = getenv("BMAPPLE2_LIVE");
 	if (r) {
 		live = 1;
 		if (!live_init(atoi(r)))
 			return 1;
 	}
-	r = getenv("BMCOCO_REFRESH");
+	r = getenv("BMAPPLE2_REFRESH");
 	if (r)
 		refresh = atof(r);
-	r = getenv("BMCOCO_REFRESH_LATER");
+	r = getenv("BMAPPLE2_REFRESH_LATER");
 	if (r)
 		refresh_later = atof(r);
-	bmcoco_main();
+	bmapple2_main();
 	return 0;
 }

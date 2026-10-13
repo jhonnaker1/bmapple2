@@ -1,9 +1,9 @@
-/* A Color Computer theme: the VDG's green text screen (dark letters on
-   bright green), its orange alternate screen, and its eight colours (green,
-   yellow, blue, red, buff, cyan, magenta, orange) as a colour bar, on the
-   dark glass of a switched-off TV. The colour names are the ones the page
-   has always used (the JS and HTML refer to them); they no longer describe
-   the colours. */
+/* An Apple II theme: a green screen monitor's text (and its inverse
+   text, dark letters on bright green), and the six colours of Apple's
+   rainbow logo (green, yellow, orange, red, purple, blue) as a colour bar,
+   on the dark glass of a switched-off monitor. The colour names are the
+   ones the page has always used (the JS and HTML refer to them); they no
+   longer describe the colours. */
 :root {
   color-scheme: dark;
   --bg: #0a0d0a;
@@ -19,38 +19,36 @@
   --key: #1c251c;
   --key-hi: #263226;
   --key-edge: #040604;
-  /* VDG colours, a little softened for a computer screen */
-  --vdg-green: #34e034;
-  --vdg-yellow: #f2ee5a;
-  --vdg-blue: #4b5cff;
-  --vdg-red: #e0393f;
-  --vdg-buff: #f1f1e4;
-  --vdg-cyan: #2fd6a0;
-  --vdg-magenta: #f04ef0;
-  --vdg-orange: #ff7a1c;
-  --vdg-ink: #061806;   /* the VDG's dark green letters */
-  --gold: var(--vdg-green);
-  --gold-hi: #6cf06c;
-  --gold-lo: #1fb41f;
-  --orange: var(--vdg-orange);
+  /* A green screen monitor's phosphor, and the rainbow logo's colours */
+  --a2-phosphor: #41e85a;
+  --a2-green: #61bb46;
+  --a2-yellow: #fdb827;
+  --a2-orange: #f5821f;
+  --a2-red: #e03a3e;
+  --a2-purple: #963d97;
+  --a2-blue: #009ddc;
+  --a2-ink: #04170a;    /* inverse text's dark letters */
+  --gold: var(--a2-phosphor);
+  --gold-hi: #7cf28e;
+  --gold-lo: #22b23a;
+  --orange: var(--a2-orange);
   --rust: #e8601a;
-  --blue: var(--vdg-green);
-  --cyan: var(--vdg-cyan);
-  --purple: var(--vdg-orange);
-  --pink: var(--vdg-magenta);
-  --green: var(--vdg-green);
-  --amber: var(--vdg-yellow);
-  --red: var(--vdg-red);
-  --stripe-1: var(--vdg-green);
-  --stripe-2: var(--vdg-yellow);
-  --stripe-3: var(--vdg-orange);
-  --stripe-4: var(--vdg-red);
-  /* The colour bar: the eight VDG colours in the CoCo's order */
+  --blue: var(--a2-phosphor);
+  --cyan: var(--a2-blue);
+  --purple: var(--a2-orange);
+  --pink: var(--a2-purple);
+  --green: var(--a2-phosphor);
+  --amber: var(--a2-yellow);
+  --red: var(--a2-red);
+  --stripe-1: var(--a2-phosphor);
+  --stripe-2: var(--a2-yellow);
+  --stripe-3: var(--a2-orange);
+  --stripe-4: var(--a2-red);
+  /* The colour bar: the rainbow logo's stripes, in its order */
   --colour-bar: linear-gradient(90deg,
-    var(--vdg-green) 0 12.5%, var(--vdg-yellow) 12.5% 25%,
-    var(--vdg-blue) 25% 37.5%, var(--vdg-red) 37.5% 50%,
-    var(--vdg-buff) 50% 62.5%, var(--vdg-cyan) 62.5% 75%,
-    var(--vdg-magenta) 75% 87.5%, var(--vdg-orange) 87.5% 100%);
+    var(--a2-green) 0 16.67%, var(--a2-yellow) 16.67% 33.33%,
+    var(--a2-orange) 33.33% 50%, var(--a2-red) 50% 66.67%,
+    var(--a2-purple) 66.67% 83.33%, var(--a2-blue) 83.33% 100%);
   --grad: linear-gradient(180deg, var(--gold-hi), var(--gold-lo));
   --display: "Helvetica Neue", "Arial Black", "Arial Bold", Arial, sans-serif;
   --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
@@ -137,7 +135,7 @@ a:hover { text-decoration: underline; }
   color: var(--dim);
 }
 
-/* The colour bar: the VDG's eight colours. */
+/* The colour bar: the rainbow logo's six colours. */
 .stripes, .stripes-sm {
   height: 8px;
   border-radius: 2px;
@@ -340,11 +338,11 @@ a:hover { text-decoration: underline; }
   text-wrap: balance;
 }
 .tile-s { font-size: 12px; line-height: 1.3; opacity: 0.8; text-wrap: balance; }
-/* Green like the VDG's text screen, orange like its other one, red for
-   switching off */
-.tile-blue, .tile-purple { --cap: var(--vdg-green); --legend: var(--vdg-ink); }
-.tile-pink { --cap: var(--vdg-orange); --legend: #221004; }
-.tile-red { --cap: var(--vdg-red); --legend: var(--cream); }
+/* Green like a green screen monitor, orange from the rainbow logo, red
+   for switching off */
+.tile-blue, .tile-purple { --cap: var(--a2-phosphor); --legend: var(--a2-ink); }
+.tile-pink { --cap: var(--a2-orange); --legend: #221004; }
+.tile-red { --cap: var(--a2-red); --legend: var(--cream); }
 .tile-amber { --cap: var(--key-hi); --legend: var(--cream); }
 /* No empty gap under the tiles until there is a message to show. */
 .qa-card .msg:empty { display: none; }
@@ -520,9 +518,9 @@ body.modal-open { overflow: hidden; }
 .ed-foot .ed-msg { flex: 1; margin: 0; min-width: 160px; }
 .ed-btns { display: flex; gap: 8px; margin-left: auto; }
 
-.btn-primary { background: var(--grad); color: var(--vdg-ink); font-weight: 700; }
+.btn-primary { background: var(--grad); color: var(--a2-ink); font-weight: 700; }
 .btn-primary:hover { border-color: rgba(0, 0, 0, 0.5); filter: brightness(1.08); }
-.btn-reboot { background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 50%), var(--vdg-orange); color: #221004; font-weight: 700; }
+.btn-reboot { background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), transparent 50%), var(--a2-orange); color: #221004; font-weight: 700; }
 .btn-reboot:hover { border-color: rgba(0, 0, 0, 0.5); filter: brightness(1.08); }
 
 /* ---------- footer ---------- */
@@ -574,18 +572,18 @@ body.modal-open { overflow: hidden; }
 
 /* ---------- name ---------- */
 
-/* BMCoco as the CoCo shows text: dark letters on a green block, with the
-   colour bar under it. */
+/* BMApple2 as an Apple II shows inverse text on a green screen: dark
+   letters on a green block, with the colour bar under it. */
 .sidebar-name, .welcome-text {
   font-family: var(--mono);
   font-weight: 800;
   text-transform: uppercase;
-  color: var(--vdg-ink);
-  background: var(--vdg-green);
+  color: var(--a2-ink);
+  background: var(--a2-phosphor);
   display: inline-block;
   padding: 0.12em 0.4em;
   border-radius: 3px;
-  box-shadow: 0 0 24px rgba(52, 224, 52, 0.18);
+  box-shadow: 0 0 24px rgba(65, 232, 90, 0.18);
 }
 .sidebar-name {
   display: block;

@@ -1,16 +1,16 @@
 /*
  * host.h - services the Circle kernel provides to the emulator.
  *
- * The emulator (XRoar and the port in src/port/) is C and runs on core 1.
+ * The emulator (KEGS and the port in src/port/) is C and runs on core 1.
  * Everything it needs from the hardware goes through these functions, which
  * are implemented in src/kernel.cpp.
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
- * Raspberry Pi. See LICENSE for licensing details.
+ * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
+ * the Raspberry Pi. See LICENSE for licensing details.
  */
 
-#ifndef BMCOCO_HOST_H_
-#define BMCOCO_HOST_H_
+#ifndef BMAPPLE2_HOST_H_
+#define BMAPPLE2_HOST_H_
 
 #include <stdint.h>
 
@@ -24,7 +24,7 @@ const char *host_option(const char *name, const char *default_value);
 int host_option_int(const char *name, int default_value);
 double host_option_double(const char *name, double default_value);
 /* Changes a setting, which then wins over cmdline.txt; host_options_save()
-   writes the settings to bmcoco.cfg on the SD card. Both return 0 on
+   writes the settings to bmapple2.cfg on the SD card. Both return 0 on
    failure. */
 int host_option_set(const char *name, const char *value);
 int host_options_save(void);
@@ -99,6 +99,10 @@ int host_pad_state(int pad);
    stick (or none is connected there). */
 int host_pad_axis(int pad, int axis);
 
+/* USB mice: how far they moved since last asked, and the buttons held
+   (bit 0 left, 1 right, 2 middle). Returns 0 if there is no mouse. */
+int host_mouse_read(int *dx, int *dy, int *buttons);
+
 /* State of the joystick wired to GPIO port PORT (0 or 1), as HOST_JOY_* bits.
    Always 0 when GPIO joysticks are disabled. */
 int host_gpio_joystick(int port);
@@ -136,7 +140,7 @@ void host_log(const char *message);
 /* Where the log goes (enable_logging=off|uart|file). */
 #define HOST_LOG_OFF  0
 #define HOST_LOG_UART 1  /* serial port, GPIO14/15 at 115200 */
-#define HOST_LOG_FILE 2  /* /bmcoco.log on the SD card */
+#define HOST_LOG_FILE 2  /* /bmapple2.log on the SD card */
 int host_log_destination(void);
 /* Changes it at once. Returns 0 if the log file cannot be opened. */
 int host_set_log_destination(int destination);
@@ -145,4 +149,4 @@ int host_set_log_destination(int destination);
 }
 #endif
 
-#endif /* BMCOCO_HOST_H_ */
+#endif /* BMAPPLE2_HOST_H_ */

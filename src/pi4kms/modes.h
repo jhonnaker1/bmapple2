@@ -13,12 +13,12 @@
 //
 // Pure computation, so tools/pi4kms can test it on a PC.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMCOCO_PI4KMS_MODES_H_
-#define BMCOCO_PI4KMS_MODES_H_
+#ifndef BMAPPLE2_PI4KMS_MODES_H_
+#define BMAPPLE2_PI4KMS_MODES_H_
 
 #include <stdint.h>
 
@@ -36,7 +36,7 @@ struct Timing {
   double Refresh(void) const { return (double)pixel_hz / HTotal() / VTotal(); }
 };
 
-// The CTA-861 timing for VIC, or 0 if it isn't one BMCoco knows.
+// The CTA-861 timing for VIC, or 0 if it isn't one BMApple2 knows.
 const Timing *CtaMode(unsigned vic);
 
 // The known mode with these active sizes and totals (as read back from the

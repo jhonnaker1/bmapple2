@@ -1,15 +1,15 @@
 //
 // kernel.h
 //
-// The Circle kernel for BMCoco: brings up the hardware, then runs the
-// XRoar emulator on core 1 while core 0 services USB.
+// The Circle kernel for BMApple2: brings up the hardware, then runs the
+// KEGS emulator on core 1 while core 0 services USB.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
-// Raspberry Pi. See LICENSE for licensing details.
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
+// the Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMCOCO_KERNEL_H_
-#define BMCOCO_KERNEL_H_
+#ifndef BMAPPLE2_KERNEL_H_
+#define BMAPPLE2_KERNEL_H_
 
 #include <SDCard/emmc.h>
 #include <circle/actled.h>
@@ -18,6 +18,7 @@
 #include <circle/gpiomanager.h>
 #include <circle/gpiopin.h>
 #include <circle/input/console.h>
+#include <circle/input/mouse.h>
 #include <circle/interrupt.h>
 #include <circle/koptions.h>
 #include <circle/logger.h>
@@ -89,6 +90,7 @@ public:
   unsigned KeyModifiers(void);
   int PadState(int pad);
   int PadAxis(int pad, int axis);
+  int MouseRead(int *dx, int *dy, int *buttons);
   int GpioJoystick(int port);
   double Time(void);
   void Reboot(void);
@@ -107,9 +109,13 @@ private:
   static void GamePadStatusHandler(unsigned nDeviceIndex,
                                    const TGamePadState *pState);
   static void GamePadRemovedHandler(CDevice *pDevice, void *pContext);
+  static void MouseStatusHandler(unsigned nButtons, int nDisplacementX,
+                                 int nDisplacementY, int nWheelMove);
+  static void MouseRemovedHandler(CDevice *pDevice, void *pContext);
 
   void SetupUSBKeyboards(void);
   void SetupUSBGamePads(void);
+  void SetupUSBMouse(void);
   void SetupGPIOJoysticks(void);
   void PushKeyEvent(int usage, int pressed);
   void UpdateMergedKeys(void);
@@ -174,6 +180,13 @@ private:
   // Axes the direction is read from on pads Circle doesn't know.
   int m_PadAxisX[HOST_PADS];
   int m_PadAxisY[HOST_PADS];
+
+  // The mouse (all USB mice are "mouse1"). The USB interrupt adds up how
+  // far it moves; the emulator takes the sums.
+  CMouseDevice *m_pMouse;
+  volatile int m_MouseDx;
+  volatile int m_MouseDy;
+  volatile int m_MouseButtons;
 
   bool m_bGPIOJoysticks;
   CGPIOPin *m_pJoyPins[2][5];

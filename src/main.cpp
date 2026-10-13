@@ -1,8 +1,8 @@
 //
 // main.cpp
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for the
-// Raspberry Pi. See LICENSE for licensing details.
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
+// the Raspberry Pi. See LICENSE for licensing details.
 //
 
 #include "kernel.h"

@@ -92,10 +92,7 @@ folder_readme() {
     mkdir -p "$STAGING_DIR/$1"
     printf '%s\r\n' "$2" > "$STAGING_DIR/$1/README.txt"
 }
-folder_readme disks    "Disk images: .dsk .vdk .jvc .os9 .dmk (Disk Drives in the menu, F12)"
-folder_readme programs "Machine code programs: .bin .hex .s19 (Run a Program in the menu)"
-folder_readme carts    "Cartridge images: .ccc .rom (Cartridge in the menu)"
-folder_readme tapes    "Cassette images: .cas .c10 .k7 (Cassette in the menu)"
+folder_readme disks    "Disk images: .po .2mg .hdv .dsk .do .nib .woz (mount them with F4, Disk Configuration, or start one from the web UI)"
 mkdir -p "$STAGING_DIR/roms"
 cp "$SRC_DIR/docs/ROMS.txt" "$STAGING_DIR/roms/ROMS.txt"
 
@@ -109,9 +106,9 @@ do
     then
         if [ "$board" = "pi4" ]
         then
-            export BMCOCO_AARCH=64
+            export BMAPPLE2_AARCH=64
         else
-            export BMCOCO_AARCH=32
+            export BMAPPLE2_AARCH=32
         fi
         source "$SRC_DIR/get_gnu_toolchain.sh"
         make -j"$(nproc)"

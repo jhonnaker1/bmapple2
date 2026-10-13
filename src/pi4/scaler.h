@@ -23,7 +23,7 @@
 //    texture2DBL(), its bilinear sampling, used when BMC64 defines
 //    BILINEAR_INTERPOLATION (smooth on).
 //  - BMC64, src/kernel.cpp in this repository (CKernel::VideoInit): the
-//    parameters BMCoco uses on the Pi 3 (curvature 0.10 x 0.15, no mask,
+//    parameters BMApple2 uses on the Pi 3 (curvature 0.10 x 0.15, no mask,
 //    gamma and fake gamma, scan lines, multisample, scan line weight 6.0,
 //    gap brightness 0.12, bloom 1.5, not SHARPER) and src/fbl.cpp: the
 //    texture is sampled GL_NEAREST, the shader draws the whole destination
@@ -55,12 +55,12 @@
 // The class doesn't know about Circle or threads: src/pi4/video.cpp shares
 // the work out between cores, and tools/pi4scaler tests it on a PC.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMCOCO_PI4_SCALER_H_
-#define BMCOCO_PI4_SCALER_H_
+#ifndef BMAPPLE2_PI4_SCALER_H_
+#define BMAPPLE2_PI4_SCALER_H_
 
 #include <stdint.h>
 
@@ -81,7 +81,7 @@ public:
   // bilinear sampling); curvature: crt-pi's curved screen (with crt only).
   void SetMode(bool crt, bool smooth, bool curvature);
 
-  // The source is RGB565 (what XRoar draws for BMCoco), SRC_PITCH pixels
+  // The source is RGB565 (what BMApple2 draws, from KEGS), SRC_PITCH pixels
   // per line; the part shown starts at (VX, VY) and is VW x VH; it is drawn
   // DW x DH. Returns false if out of memory.  (BMA800XL's source is 8-bit
   // indexed, with a palette.)

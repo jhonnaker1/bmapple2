@@ -5,7 +5,7 @@
 // src/pi4kms/modes.*): EDID, choosing the mode, the AVI InfoFrame, the
 // PHY's settings and the audio clock.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
@@ -22,11 +22,15 @@ using namespace kms;
 // NTSC 262 lines at 1.789790 MHz.
 static const double PalFps = 1773447.0 / 114 / 312;
 static const double NtscFps = 1789790.0 / 114 / 262;
-// XRoar's (BMCoco's): video lines of 912 ticks of its 14.31818 MHz clock,
-// 262 a frame for an NTSC CoCo 1/2, 263 for a CoCo 3, 312 for a PAL CoCo.
-static const double CocoFps = 14318180.0 / 912 / 262;
-static const double Coco3Fps = 14318180.0 / 912 / 263;
-static const double CocoPalFps = 14318180.0 / 912 / 312;
+// KEGS's (BMApple2's): 262 lines of 65 cycles of the IIgs's 1.0205 MHz
+// (its 28.636 MHz crystal divided by 28, every 65th cycle stretched; KEGS's
+// VBL_RATE, defc.h).
+static const double Iigs1Mhz = 28636360.0 / 28.0 * (65.0 * 7 / (65.0 * 7 + 1.0));
+static const double IigsFps = Iigs1Mhz / (262 * 65);
+// Rates just outside CTA-861's 0.5 % of 60 and 50 Hz (BMCoco's CoCo 3 and
+// PAL CoCo), which must be refused.
+static const double Near60Fps = 14318180.0 / 912 / 263;
+static const double Near50Fps = 14318180.0 / 912 / 312;
 
 static void Checksum(uint8_t *block) {
   uint8_t sum = 0;
@@ -112,16 +116,16 @@ static void TestChooseMode(void) {
   ok = ChooseMode(*CtaMode(4), PalFps, edid, &chosen);
   Check(ok && chosen.vic == 19, "mode 720p", "720p60 -> 720p50 for PAL");
 
-  // The CoCo 2 (59.92 Hz) is within CTA-861's 0.5 %; the CoCo 3 (59.70 Hz)
-  // and a PAL CoCo (50.32 Hz) are just outside, so the display keeps its
-  // mode and BMCoco locks to that (as on a Pi 3).
-  ok = ChooseMode(*CtaMode(4), CocoFps, edid, &chosen);
+  // The IIgs (59.92 Hz) is within CTA-861's 0.5 %; 59.70 Hz and 50.32 Hz
+  // are just outside, so the display would keep its mode and lock to that
+  // (as on a Pi 3).
+  ok = ChooseMode(*CtaMode(4), IigsFps, edid, &chosen);
   snprintf(what, sizeof what, "720p60 -> VIC %u, %.5f Hz", chosen.vic, chosen.Refresh());
-  Check(ok && chosen.vic == 4 && fabs(chosen.Refresh() / CocoFps - 1.0) < 1e-6,
-        "mode CoCo", what);
-  Check(!ChooseMode(*CtaMode(4), Coco3Fps, edid, &chosen), "mode CoCo 3",
+  Check(ok && chosen.vic == 4 && fabs(chosen.Refresh() / IigsFps - 1.0) < 1e-6,
+        "mode IIgs", what);
+  Check(!ChooseMode(*CtaMode(4), Near60Fps, edid, &chosen), "mode 59.70 Hz",
         "59.70 Hz refused: 720p60 kept");
-  Check(!ChooseMode(*CtaMode(19), CocoPalFps, edid, &chosen), "mode CoCo PAL",
+  Check(!ChooseMode(*CtaMode(19), Near50Fps, edid, &chosen), "mode 50.32 Hz",
         "50.32 Hz refused: 720p50 kept");
 
   const uint8_t only60[] = {16, 4};

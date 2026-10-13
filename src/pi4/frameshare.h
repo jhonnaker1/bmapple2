@@ -27,12 +27,12 @@
 //
 // On a PC (tools/pi4scaler) waiting yields the thread instead.
 //
-// This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
 // the Raspberry Pi. See LICENSE for licensing details.
 //
 
-#ifndef BMCOCO_PI4_FRAMESHARE_H_
-#define BMCOCO_PI4_FRAMESHARE_H_
+#ifndef BMAPPLE2_PI4_FRAMESHARE_H_
+#define BMAPPLE2_PI4_FRAMESHARE_H_
 
 #ifdef __circle__
 #include <circle/synchronize.h>

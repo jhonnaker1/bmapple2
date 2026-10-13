@@ -1,32 +1,32 @@
-BMCoco - bare metal Tandy Color Computer emulator for the Raspberry Pi 2 and 3
-==============================================================================
+BMApple2 - bare metal Apple IIgs and Apple IIe emulator for the Raspberry Pi
+============================================================================
 
 Copy everything here to the root of a FAT32 SD card and boot a Raspberry
-Pi 3, Zero 2 W or Pi 2 from it, with a USB keyboard or gamepad connected.
+Pi 4, 400, 3, Zero 2 W or 2 from it, with a USB keyboard (and a mouse for
+the IIgs desktop, and a gamepad if you like) connected.
 
-First copy your Color Computer ROMs into the roms folder: bas13.rom and
-extbas11.rom for a CoCo 2, disk11.rom for disks, coco3.rom for a CoCo 3
-(see roms/ROMS.txt). They are copyrighted, so they are not included.
+First copy an Apple IIgs ROM (ROM.03 or ROM.01) or an Apple IIe ROM into
+the roms folder (see roms/ROMS.txt). They are copyrighted, so they are not
+included.
 
-It starts in Color BASIC. Press F12 for the menu: run a program, disks,
-cassette, cartridge, machine, joysticks, video, keyboard, sound, network.
+Disks: press F4 for KEGS's settings, Disk Configuration, and choose a disk
+image for a drive (slot 7 for hard disks, 5 for 3.5", 6 for 5.25"). They
+are remembered in config.kegs. Or start one from the web UI.
 
-  F12           Menu                F10 / Shift+F10  Reset / hard reset
-  F11           Turbo               Esc              BREAK
-  Home          CLEAR               Alt, Caps Lock   CoCo 3 ALT, CTRL
+  F10           BMApple2's menu       F4            KEGS settings (disks, ROM)
+  Ctrl+F12      Reset                 F6            Speed
+  Windows/Cmd   Open Apple            Alt           Option (Solid Apple)
+  F1, F2        Open Apple, Option    F3            Escape
 
-Gamepads are the CoCo's joysticks: stick or D-pad to move, A to fire,
-X Space, Y Enter, Home (or Select+Start) for the menu.
+Gamepads are the joystick (paddles): stick or D-pad to move, A and B the
+buttons, X Space, Y Return, Home (or Select+Start) for the menu.
 
-Put your files in the disks, tapes, carts and programs folders (or
-anywhere).
-
-Video is 720p at 60 Hz for an NTSC CoCo. For a PAL CoCo, set hdmi_mode=19
-in config.txt and choose it under Machine in the menu.
+Put your disk images in the disks folder (or anywhere).
 
 Networking: choose Ethernet or Wi-Fi under Network in the menu (or add
 network=ethernet or network=wifi to cmdline.txt), then open the address
-shown on screen in a browser to manage the files on this card.
+shown on screen in a browser to manage the files on this card and start
+disk images.
 
-Options are in cmdline.txt; see docs/USER_GUIDE.md in BMCoco's source for
+Options are in cmdline.txt; see docs/USER_GUIDE.md in BMApple2's source for
 all of them.

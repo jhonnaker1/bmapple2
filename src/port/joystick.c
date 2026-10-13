@@ -1,240 +1,108 @@
 /*
- * joystick.c - the CoCo's joysticks for BMCoco.
+ * joystick.c - the Apple II's joysticks and paddles for BMApple2.
  *
- * The CoCo's joysticks are analog: each axis is a position, read by the
- * CoCo's 6 bit DAC. BMCoco offers XRoar two joysticks, "joy0" and "joy1"
- * (Joystick 1 and 2), as XRoar's "physical" joystick submodule. Each takes
- * its input from a USB gamepad and from a joystick wired to the GPIO header:
+ * Replaces KEGS's joystick_driver.c (which reads Linux's /dev/js0 or Mac
+ * HID devices) with the same three functions, fed from USB gamepads and the
+ * GPIO header like KEGS's Mac version is from its HID callback.
  *
- *  - a gamepad's left analog stick gives the position as it is, so games
- *    that use the whole range of the CoCo's joystick work properly;
- *  - the D-pad, digital sticks and GPIO joysticks push it to the edges.
+ * The Apple II's paddles are analog, like the CoCo's joysticks: a gamepad's
+ * left stick gives the position as it is; the D-pad and GPIO joysticks
+ * push it to the edges.
  *
- * By default Joystick 1 is plugged into the CoCo's right port (the one most
- * games use) and Joystick 2 into the left; the menu can change that.
+ *   gamepad 1 / GPIO 1: paddles 0 and 1 (the joystick), buttons 0 (A) and
+ *                       1 (B)
+ *   gamepad 2 / GPIO 2: paddles 2 and 3, button 2 (A)
  *
- * Gamepad buttons: A is the fire button, B the CoCo 3's second button, X
- * types Space and Y Enter, which most games want at some point.
- *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 
-#include "top-config.h"
-
-#include <stdlib.h>
-#include <string.h>
-
-#include "xalloc.h"
-
-#include "hkbd.h"
-#include "joystick.h"
-#include "logging.h"
-#include "module.h"
+#include "defc.h"
 
 #include "../host.h"
-#include "bmcoco.h"
+#include "bmapple2.h"
 
-#define NUM_JOYSTICKS 2
+extern int g_joystick_native_type1;   /* paddles.c */
+extern int g_joystick_native_type2;
+extern int g_paddle_buttons;
+extern int g_paddle_val[];
 
-/* Away from the centre by more than this, a stick is a position rather than
-   a push on the D-pad (the kernel reports the stick as D-pad presses past a
-   quarter of its range). */
+void paddle_update_trigger_dcycs(dword64 dfcyc);
+
+/* Past a quarter of the range a stick also reports D-pad presses (the
+   kernel); nearer the middle it is only a position. */
 #define STICK_THRESHOLD 8192
 
-int bmcoco_joystick_pad(int n)
+/* One axis, -32768 (left/up) to 32767 (right/down), as KEGS's paddles take
+   it. */
+static int axis(int pad, int axis_index, int state, int gpio)
 {
-	static const char *const names[NUM_JOYSTICKS] = {"joy1_pad", "joy2_pad"};
-	int pad;
-	if (n < 0 || n >= NUM_JOYSTICKS)
-		return -1;
-	/* 0 automatic (gamepad N for joystick N), 1-4 a gamepad, -1 none. */
-	pad = host_option_int(names[n], 0);
-	if (pad < 0 || pad > HOST_PADS)
-		return -1;
-	return pad == 0 ? n : pad - 1;
-}
-
-void bmcoco_joystick_settings_changed(void)
-{
-	/* Settings are read each time a joystick is read. */
-}
-
-static int pad_state(int n)
-{
-	int pad = bmcoco_joystick_pad(n);
-	int state = pad >= 0 ? host_pad_state(pad) : 0;
-	return state < 0 ? 0 : state;
-}
-
-/* ---- Axes ----------------------------------------------------------------- */
-
-struct bm_axis {
-	struct joystick_control control;
-	int joystick;
-	int axis;
-};
-
-static int read_axis(void *sptr)
-{
-	struct bm_axis *a = sptr;
-	int state = pad_state(a->joystick);
-	int gpio = host_gpio_joystick(a->joystick);
-	int pad = bmcoco_joystick_pad(a->joystick);
-	int analog = pad >= 0 ? host_pad_axis(pad, a->axis) : -1;
-	int neg_pad = a->axis == 0 ? HOST_PAD_LEFT : HOST_PAD_UP;
-	int pos_pad = a->axis == 0 ? HOST_PAD_RIGHT : HOST_PAD_DOWN;
-	int neg_gpio = a->axis == 0 ? HOST_JOY_LEFT : HOST_JOY_UP;
-	int pos_gpio = a->axis == 0 ? HOST_JOY_RIGHT : HOST_JOY_DOWN;
+	int neg_pad = axis_index == 0 ? HOST_PAD_LEFT : HOST_PAD_UP;
+	int pos_pad = axis_index == 0 ? HOST_PAD_RIGHT : HOST_PAD_DOWN;
+	int neg_gpio = axis_index == 0 ? HOST_JOY_LEFT : HOST_JOY_UP;
+	int pos_gpio = axis_index == 0 ? HOST_JOY_RIGHT : HOST_JOY_DOWN;
+	int analog = host_pad_axis(pad, axis_index);
 
 	if (gpio & neg_gpio)
-		return 0;
+		return -32768;
 	if (gpio & pos_gpio)
-		return 65535;
+		return 32767;
 	if (analog >= 0) {
 		int offset = analog - 32768;
 		if (offset > STICK_THRESHOLD || offset < -STICK_THRESHOLD
 		    || !(state & (neg_pad | pos_pad)))
-			return analog;
-		/* The stick is near the middle but the D-pad is pressed. */
+			return offset > 32767 ? 32767 : offset;
 	}
 	if (state & neg_pad)
-		return 0;
+		return -32768;
 	if (state & pos_pad)
-		return 65535;
-	return 32768;
+		return 32767;
+	return 0;
 }
 
-static void free_control(void *sptr)
+void joystick_init(void)
 {
-	free(sptr);
+	/* Always there: a gamepad or GPIO joystick can be plugged in at any
+	   time, and with none the sticks rest in the middle. */
+	g_joystick_native_type1 = 1;
+	g_joystick_native_type2 = 1;
 }
 
-/* Spec: "JOYSTICK,AXIS" */
-static struct joystick_control *configure_axis(char *spec, unsigned jaxis)
+static int pad_buttons(void)
 {
-	struct bm_axis *a = xmalloc(sizeof(*a));
-	*a = (struct bm_axis){0};
-	a->joystick = 0;
-	a->axis = jaxis & 1;
-	if (spec != NULL && *spec != '\0') {
-		char *comma = strchr(spec, ',');
-		a->joystick = atoi(spec) & 1;
-		if (comma != NULL)
-			a->axis = atoi(comma + 1) & 1;
-	}
-	a->control.read = DELEGATE_AS0(int, read_axis, a);
-	a->control.free = DELEGATE_AS0(void, free_control, a);
-	return &a->control;
+	int buttons = 0;
+	int pad0 = host_pad_state(0), pad1 = host_pad_state(1);
+	if (pad0 < 0)
+		pad0 = 0;
+	if (pad1 < 0)
+		pad1 = 0;
+	if ((pad0 & HOST_PAD_A) || (host_gpio_joystick(0) & HOST_JOY_FIRE))
+		buttons |= 1;
+	if (pad0 & HOST_PAD_B)
+		buttons |= 2;
+	if ((pad1 & HOST_PAD_A) || (host_gpio_joystick(1) & HOST_JOY_FIRE))
+		buttons |= 4;
+	return buttons;
 }
 
-/* ---- Buttons --------------------------------------------------------------- */
-
-struct bm_button {
-	struct joystick_control control;
-	int joystick;
-	int button;
-};
-
-static int read_button(void *sptr)
+void joystick_update(dword64 dfcyc)
 {
-	struct bm_button *b = sptr;
-	int state = pad_state(b->joystick);
-	if (b->button == 0)
-		return (state & HOST_PAD_A) || (host_gpio_joystick(b->joystick) & HOST_JOY_FIRE);
-	return (state & HOST_PAD_B) != 0;
-}
-
-/* Spec: "JOYSTICK,BUTTON" */
-static struct joystick_control *configure_button(char *spec, unsigned jbutton)
-{
-	struct bm_button *b = xmalloc(sizeof(*b));
-	*b = (struct bm_button){0};
-	b->joystick = 0;
-	b->button = jbutton & 1;
-	if (spec != NULL && *spec != '\0') {
-		char *comma = strchr(spec, ',');
-		b->joystick = atoi(spec) & 1;
-		if (comma != NULL)
-			b->button = atoi(comma + 1) & 1;
-	}
-	b->control.read = DELEGATE_AS0(int, read_button, b);
-	b->control.free = DELEGATE_AS0(void, free_control, b);
-	return &b->control;
-}
-
-/* ---- The submodule ------------------------------------------------------------ */
-
-/* Defines "joy0" and "joy1", which XRoar plugs into the right and left
-   ports unless told otherwise. */
-static void physical_init(void)
-{
-	static const char *const descriptions[NUM_JOYSTICKS] = {
-		"Joystick 1 (gamepad 1, GPIO 1)",
-		"Joystick 2 (gamepad 2, GPIO 2)",
-	};
-	int n, i;
-	for (n = 0; n < NUM_JOYSTICKS; n++) {
-		struct joystick_config *jc;
-		char text[32];
-		snprintf(text, sizeof(text), "joy%d", n);
-		if (joystick_config_by_name(text) != NULL)
-			continue;
-		jc = joystick_config_new();
-		jc->name = xstrdup(text);
-		jc->description = xstrdup(descriptions[n]);
-		for (i = 0; i < JOYSTICK_NUM_AXES; i++) {
-			snprintf(text, sizeof(text), "physical:%d,%d", n, i);
-			jc->axis_specs[i] = xstrdup(text);
-		}
-		for (i = 0; i < JOYSTICK_NUM_BUTTONS; i++) {
-			snprintf(text, sizeof(text), "physical:%d,%d", n, i);
-			jc->button_specs[i] = xstrdup(text);
-		}
-	}
-}
-
-static struct joystick_submodule bmcoco_js_physical = {
-	.name = "physical",
-	.init = physical_init,
-	.configure_axis = configure_axis,
-	.configure_button = configure_button,
-};
-
-static struct joystick_submodule *bmcoco_js_submodules[] = {
-	&bmcoco_js_physical, NULL
-};
-
-struct joystick_module bmcoco_js_mod = {
-	.common = { .name = "bmcoco", .description = "Gamepads and GPIO joysticks" },
-	.submodule_list = bmcoco_js_submodules,
-};
-
-/* ---- Buttons that type keys ------------------------------------------------ */
-
-void bmcoco_pad_keys(void)
-{
-	static const struct { int button; uint8_t key; } keys[] = {
-		{HOST_PAD_X, hk_scan_space},
-		{HOST_PAD_Y, hk_scan_Return},
-	};
-	static int last[HOST_PADS];
 	int pad;
-	unsigned k;
-	for (pad = 0; pad < HOST_PADS; pad++) {
+	for (pad = 0; pad < 2; pad++) {
 		int state = host_pad_state(pad);
-		int changed;
+		int gpio = host_gpio_joystick(pad);
 		if (state < 0)
 			state = 0;
-		changed = state ^ last[pad];
-		last[pad] = state;
-		for (k = 0; k < sizeof(keys) / sizeof(keys[0]); k++) {
-			if (!(changed & keys[k].button))
-				continue;
-			if (state & keys[k].button)
-				hk_scan_press(keys[k].key);
-			else
-				hk_scan_release(keys[k].key);
-		}
+		g_paddle_val[pad * 2] = axis(pad, 0, state, gpio);
+		g_paddle_val[pad * 2 + 1] = axis(pad, 1, state, gpio);
 	}
+	/* Bits 2 and 3 high: as KEGS's own drivers do with no third or
+	   fourth button. */
+	g_paddle_buttons = 0x8 | pad_buttons();
+	paddle_update_trigger_dcycs(dfcyc);
+}
+
+void joystick_update_buttons(void)
+{
+	g_paddle_buttons = 0x8 | pad_buttons();
 }

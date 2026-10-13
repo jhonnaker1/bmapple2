@@ -4,7 +4,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 WLAN_FIRMWARE_DIR="$SCRIPT_DIR/third_party/circle-stdlib/libs/circle/addon/wlan/firmware"
-FIRMWARE_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bmcoco/wlan-firmware"
+FIRMWARE_CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/bmapple2/wlan-firmware"
 FIRMWARE_LICENSE_URL_BASE="https://raw.githubusercontent.com/RPi-Distro/firmware-nonfree"
 
 WLAN_FIRMWARE=(

@@ -1,47 +1,28 @@
 /*
- * menu.c - the BMCoco menu.
+ * menu.c - the BMApple2 menu.
  *
- * F12, a gamepad's Home button or Select+Start open it. Everything about
- * the emulated CoCo (programs, disks, tapes, cartridges, the machine,
- * joysticks, video, keyboard) and BMCoco's own settings (network, sound,
- * power). Settings are saved in bmcoco.cfg and used again at the next boot.
+ * F10, a gamepad's Home button or Select+Start open it. BMApple2's own
+ * settings (network, sound, video, power); everything about the emulated
+ * IIgs (disks, the ROM, speed, the machine's settings) is in KEGS's own
+ * configuration screen, F4, which this menu opens too. Settings are saved
+ * in bmapple2.cfg and used again at the next boot.
  *
- * XRoar is told about changes through its UI messages (ui_update_state),
- * the same way its GTK and Windows menus do it, and BMCoco listens to the
- * same messages to know the current state.
+ * From BMCoco's menu.c.
  *
- * This file is part of BMCoco, a bare metal Tandy Color Computer emulator for
+ * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 
-#include "top-config.h"
+#include "defc.h"
 
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
-#include "slist.h"
-
-#include "cart.h"
-#include "hkbd.h"
-#include "joystick.h"
-#include "machine.h"
-#include "messenger.h"
-#include "part.h"
-#include "ui.h"
-#include "vdisk.h"
-#include "vdrive.h"
-#include "vo.h"
-#include "xconfig.h"
-#include "xroar.h"
 
 #include "../host.h"
-#include "bmcoco.h"
+#include "bmapple2.h"
 #include "osd.h"
 
-#ifndef BMCOCO_VERSION
-#define BMCOCO_VERSION "dev"
+#ifndef BMAPPLE2_VERSION
+#define BMAPPLE2_VERSION "dev"
 #endif
 
 #define WPA_CONFIG "wpa_supplicant.conf"
@@ -49,70 +30,12 @@
 /* Something changed that only takes effect after a reboot. */
 static int reboot_needed;
 
-/* Where the file browser was last ("" until it's first used). */
-static char browse_dir[256];
-
-/* ---- XRoar's state, from its UI messages ---------------------------------- */
-
-static struct {
-	int machine_id;
-	int cart_id;
-	int joystick_id[2];  /* 0 right port, 1 left */
-	int tv_input;
-	int ccr;
-	int picture;
-	int kbd_translate;
-	int hkbd_lang;
-	int tape_fast;
-	char tape_name[256];
-} state;
-
-static void state_notify(void *sptr, int tag, void *smsg)
-{
-	struct ui_state_message *msg = smsg;
-	(void) sptr;
-	switch (tag) {
-	case ui_tag_machine: state.machine_id = msg->value; break;
-	case ui_tag_cartridge: state.cart_id = msg->value; break;
-	case ui_tag_joystick_port:
-		if (msg->value == 0 || msg->value == 1)
-			state.joystick_id[msg->value] = (int) (intptr_t) msg->data;
-		break;
-	case ui_tag_tv_input: state.tv_input = msg->value; break;
-	case ui_tag_ccr: state.ccr = msg->value; break;
-	case ui_tag_picture: state.picture = msg->value; break;
-	case ui_tag_kbd_translate: state.kbd_translate = msg->value; break;
-	case ui_tag_hkbd_lang: state.hkbd_lang = msg->value; break;
-	case ui_tag_tape_flag_fast: state.tape_fast = msg->value; break;
-	case ui_tag_tape_input_filename:
-		snprintf(state.tape_name, sizeof(state.tape_name), "%s",
-		         msg->data ? (const char *) msg->data : "");
-		break;
-	default: break;
-	}
-}
-
-/* Called from the user interface module when XRoar starts. */
-void bmcoco_menu_attach(void)
-{
-	static const int tags[] = {
-		ui_tag_machine, ui_tag_cartridge, ui_tag_joystick_port, ui_tag_tv_input,
-		ui_tag_ccr, ui_tag_picture, ui_tag_kbd_translate, ui_tag_hkbd_lang,
-		ui_tag_tape_flag_fast, ui_tag_tape_input_filename,
-	};
-	int client = messenger_client_register();
-	unsigned i;
-	state.tape_fast = 1;
-	for (i = 0; i < sizeof(tags) / sizeof(tags[0]); i++)
-		ui_messenger_join_group(client, tags[i], MESSENGER_NOTIFY_DELEGATE(state_notify, NULL));
-}
-
 /* ---- Settings ---------------------------------------------------------- */
 
 static void save_setting(const char *name, const char *value)
 {
 	if (!host_option_set(name, value) || !host_options_save())
-		osd_message("Cannot save bmcoco.cfg", TRUE);
+		osd_message("Cannot save bmapple2.cfg", TRUE);
 }
 
 static void save_setting_int(const char *name, int value)
@@ -136,446 +59,10 @@ static unsigned check(int on)
 	return OSD_ITEM_CHECK | (on ? OSD_ITEM_CHECKED : 0);
 }
 
-/* Lets one of an XRoar option's values be chosen; returns its index in
-   LIST, or -1. */
-static int choose_enum(const char *title, const struct xconfig_enum *list, int current_value)
-{
-	const char *choices[48];
-	int n, current = 0;
-	for (n = 0; list[n].name != NULL && n < 47; n++) {
-		choices[n] = list[n].description;
-		if (list[n].value == current_value)
-			current = n;
-	}
-	choices[n] = NULL;
-	return osd_choose(title, choices, current);
-}
-
-static const char *enum_description(const struct xconfig_enum *list, int value)
-{
-	int i;
-	for (i = 0; list[i].name != NULL; i++)
-		if (list[i].value == value)
-			return list[i].description;
-	return "?";
-}
-
-static const char *base_name(const char *path)
-{
-	const char *slash;
-	if (path == NULL)
-		return NULL;
-	slash = strrchr(path, '/');
-	return slash ? slash + 1 : path;
-}
-
 static void power(int off)
 {
-	bmcoco_request_power(off);
-	bmcoco_idle();
-}
-
-/* ---- Files --------------------------------------------------------------- */
-
-static const char *const run_exts[] = {
-	"dsk", "vdk", "jvc", "os9", "dmk", "cas", "c10", "k7", "ccc", "rom",
-	"bin", "hex", "s19", "sna", NULL
-};
-static const char *const disk_exts[] = {"dsk", "vdk", "jvc", "os9", "dmk", NULL};
-static const char *const tape_exts[] = {"cas", "c10", "k7", NULL};
-static const char *const cart_exts[] = {"ccc", "rom", NULL};
-
-static int browse(const char *title, const char *const exts[], char *path, size_t size)
-{
-	if (browse_dir[0] == '\0')
-		snprintf(browse_dir, sizeof(browse_dir), "%s", bmcoco_sd_root());
-	return osd_browse(title, browse_dir, sizeof(browse_dir), exts, path, size);
-}
-
-/* Starts a program, disk, tape or cartridge: XRoar works out how. */
-static int run_file(void)
-{
-	char path[512];
-	if (!browse("Run a Program", run_exts, path, sizeof(path)))
-		return FALSE;
-	xroar_load_file_by_type(path, 1);
-	return TRUE;
-}
-
-/* ---- Disks ----------------------------------------------------------------- */
-
-static struct vdisk *disk_in(int drive)
-{
-	if (xroar.vdrive_interface == NULL)
-		return NULL;
-	return vdrive_disk_in_drive(xroar.vdrive_interface, drive);
-}
-
-static void drive_menu(int drive)
-{
-	enum { D_INSERT, D_EJECT, D_PROTECT };
-	char title[32], protect_text[8];
-	int sel = 0;
-	snprintf(title, sizeof(title), "Drive %d", drive);
-	for (;;) {
-		struct vdisk *disk = disk_in(drive);
-		struct osd_item items[5];
-		int n = 0, chosen;
-		items[n++] = (struct osd_item){
-			disk ? base_name(disk->filename) : "(empty)", NULL, OSD_ITEM_LABEL, -1};
-		items[n++] = (struct osd_item){"", NULL, OSD_ITEM_LABEL, -1};
-		items[n++] = (struct osd_item){"Insert Disk...", NULL, OSD_ITEM_SUBMENU, D_INSERT};
-		if (disk != NULL) {
-			items[n++] = (struct osd_item){"Eject", NULL, 0, D_EJECT};
-			snprintf(protect_text, sizeof(protect_text), "%s",
-			         disk->write_protect ? "On" : "Off");
-			items[n++] = (struct osd_item){"Write Protect", protect_text, 0, D_PROTECT};
-		}
-		if (sel == 0)
-			sel = 2;
-		chosen = osd_menu(title, items, n, &sel);
-		switch (chosen) {
-		case D_INSERT: {
-			char path[512];
-			if (browse("Insert Disk", disk_exts, path, sizeof(path))) {
-				xroar_insert_disk_file(drive, path);
-				return;
-			}
-			break;
-		}
-		case D_EJECT:
-			xroar_eject_disk(drive);
-			return;
-		case D_PROTECT:
-			ui_update_state(-1, ui_tag_disk_write_enable, UI_NEXT, (void *) (intptr_t) drive);
-			break;
-		default:
-			return;
-		}
-	}
-}
-
-static void disks_menu(void)
-{
-	static char names[4][48];
-	int sel = 0;
-	for (;;) {
-		struct osd_item items[4];
-		int drive, chosen;
-		for (drive = 0; drive < 4; drive++) {
-			struct vdisk *disk = disk_in(drive);
-			snprintf(names[drive], sizeof(names[drive]), "%s",
-			         disk ? base_name(disk->filename) : "(empty)");
-			items[drive].text = drive == 0 ? "Drive 0" : drive == 1 ? "Drive 1"
-			                    : drive == 2 ? "Drive 2" : "Drive 3";
-			items[drive].value = names[drive];
-			items[drive].flags = OSD_ITEM_SUBMENU;
-			items[drive].id = drive;
-		}
-		chosen = osd_menu("Disk Drives", items, 4, &sel);
-		if (chosen < 0)
-			return;
-		drive_menu(chosen);
-	}
-}
-
-/* ---- Cassette ----------------------------------------------------------- */
-
-static void tape_menu(void)
-{
-	enum { T_INSERT, T_REWIND, T_EJECT, T_FAST };
-	int sel = 2;
-	for (;;) {
-		const char *name = state.tape_name[0] ? base_name(state.tape_name) : NULL;
-		struct osd_item items[] = {
-			{name ? name : "(no tape)", NULL, OSD_ITEM_LABEL, -1},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Insert Tape...", NULL, OSD_ITEM_SUBMENU, T_INSERT},
-			{"Rewind", NULL, 0, T_REWIND},
-			{"Eject", NULL, 0, T_EJECT},
-			{"Fast Loading", NULL, check(state.tape_fast), T_FAST},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Type CLOAD or CLOADM to load.", NULL, OSD_ITEM_LABEL, -1},
-		};
-		int chosen = osd_menu("Cassette", items, sizeof(items) / sizeof(items[0]), &sel);
-		switch (chosen) {
-		case T_INSERT: {
-			char path[512];
-			if (browse("Insert Tape", tape_exts, path, sizeof(path))) {
-				xroar_insert_input_tape_file(path);
-				return;
-			}
-			break;
-		}
-		case T_REWIND:
-			ui_update_state(-1, ui_tag_action, ui_action_tape_input_rewind, NULL);
-			osd_notify("Tape rewound");
-			return;
-		case T_EJECT:
-			xroar_eject_input_tape();
-			return;
-		case T_FAST:
-			ui_update_state(-1, ui_tag_tape_flag_fast, UI_NEXT, NULL);
-			break;
-		default:
-			return;
-		}
-	}
-}
-
-/* ---- Cartridges ---------------------------------------------------------- */
-
-/* Cartridges that fit this machine: XRoar keeps a list of the kinds a
-   machine takes, "dragon-cart" for the CoCo and Dragon. */
-static const char *cart_arch(void)
-{
-	const struct partdb_entry *pe;
-	if (xroar.machine_config == NULL)
-		return NULL;
-	pe = partdb_find_entry(xroar.machine_config->architecture);
-	if (pe == NULL || !partdb_ent_is_a(pe, "machine"))
-		return NULL;
-	return ((const struct machine_partdb_entry *) pe)->cart_arch;
-}
-
-static const char *cart_name(int id)
-{
-	struct slist *l;
-	for (l = cart_config_list(); l != NULL; l = l->next) {
-		struct cart_config *cc = l->data;
-		if (cc->id == id)
-			return cc->description ? cc->description : cc->name;
-	}
-	return "None";
-}
-
-static void cart_menu(void)
-{
-	enum { C_NONE = -10, C_FILE = -11 };
-	struct osd_item items[64];
-	struct slist *l, *list;
-	const char *arch = cart_arch();
-	int n = 0, sel = 0, chosen;
-
-	items[n++] = (struct osd_item){"Load Cartridge File...", NULL, OSD_ITEM_SUBMENU, C_FILE};
-	items[n++] = (struct osd_item){"", NULL, OSD_ITEM_LABEL, -1};
-	items[n++] = (struct osd_item){"None", state.cart_id == 0 ? "*" : NULL, 0, C_NONE};
-	list = arch ? cart_config_list_is_a(arch) : NULL;
-	for (l = list; l != NULL && n < 64; l = l->next) {
-		struct cart_config *cc = l->data;
-		/* Only the ones built in: ROM files from the user are under
-		   "Load Cartridge File". */
-		items[n++] = (struct osd_item){
-			cc->description ? cc->description : cc->name,
-			cc->id == state.cart_id ? "*" : NULL, 0, cc->id};
-	}
-	slist_free(list);
-
-	chosen = osd_menu("Cartridge", items, n, &sel);
-	if (chosen == C_FILE) {
-		char path[512];
-		if (browse("Load Cartridge", cart_exts, path, sizeof(path)))
-			xroar_load_file_by_type(path, 1);
-	} else if (chosen == C_NONE) {
-		ui_update_state(-1, ui_tag_cartridge, 0, NULL);
-		xroar_hard_reset();
-	} else if (chosen >= 0) {
-		ui_update_state(-1, ui_tag_cartridge, chosen, NULL);
-		xroar_hard_reset();
-	}
-}
-
-/* ---- Machine ------------------------------------------------------------ */
-
-static int machine_has_roms(struct machine_config *mc)
-{
-	const struct partdb_entry *pe = partdb_find_entry(mc->architecture);
-	const struct machine_partdb_entry *mpe;
-	if (pe == NULL || !partdb_ent_is_a(pe, "machine"))
-		return FALSE;
-	mpe = (const struct machine_partdb_entry *) pe;
-	return mpe->is_working_config != NULL && mpe->is_working_config(mc);
-}
-
-static const char *machine_name(void)
-{
-	struct machine_config *mc = xroar.machine_config;
-	if (mc == NULL)
-		return "?";
-	return mc->description ? mc->description : mc->name;
-}
-
-static void machine_menu(void)
-{
-	struct osd_item items[48];
-	struct machine_config *configs[48];
-	struct slist *l;
-	int n = 0, sel = 0, chosen;
-
-	for (l = machine_config_list(); l != NULL && n < 48; l = l->next) {
-		struct machine_config *mc = l->data;
-		configs[n] = mc;
-		if (mc == xroar.machine_config)
-			sel = n;
-		items[n] = (struct osd_item){
-			mc->description ? mc->description : mc->name,
-			mc == xroar.machine_config ? "*" : machine_has_roms(mc) ? NULL : "no ROM",
-			0, n};
-		n++;
-	}
-	chosen = osd_menu("Machine", items, n, &sel);
-	if (chosen < 0 || configs[chosen] == xroar.machine_config)
-		return;
-	if (!machine_has_roms(configs[chosen])) {
-		osd_message("The ROMs for this machine are not on the SD card. "
-		            "See ROMS.txt in the roms folder.", TRUE);
-		return;
-	}
-	ui_update_state(-1, ui_tag_machine, configs[chosen]->id, NULL);
-	save_setting("machine", configs[chosen]->name);
-}
-
-/* ---- Joysticks ---------------------------------------------------------- */
-
-static const char *joystick_name(int id)
-{
-	struct joystick_config *jc = id ? joystick_config_by_id(id) : NULL;
-	if (jc == NULL)
-		return "None";
-	if (strcmp(jc->name, "joy0") == 0)
-		return "Joystick 1";
-	if (strcmp(jc->name, "joy1") == 0)
-		return "Joystick 2";
-	if (strcmp(jc->name, "kjoy0") == 0)
-		return "Arrow keys";
-	return jc->description ? jc->description : jc->name;
-}
-
-/* Plugs joystick NAME into PORT (0 right, 1 left). */
-static void set_port(int port, const char *name)
-{
-	struct joystick_config *jc = joystick_config_by_name(name);
-	if (jc == NULL)
-		return;
-	ui_update_state(-1, ui_tag_joystick_port, port, (void *) (intptr_t) jc->id);
-	save_setting(port == 0 ? "joy_right" : "joy_left", name);
-}
-
-static void choose_port(int port)
-{
-	static const char *const names[] = {"joy0", "joy1", "kjoy0", NULL};
-	static const char *const choices[] = {
-		"Joystick 1", "Joystick 2", "Arrow keys + Alt (fire)", NULL
-	};
-	struct joystick_config *jc = joystick_config_by_id(state.joystick_id[port]);
-	int current = 0, i;
-	for (i = 0; jc != NULL && names[i] != NULL; i++)
-		if (strcmp(jc->name, names[i]) == 0)
-			current = i;
-	i = osd_choose(port == 0 ? "Right Joystick Port" : "Left Joystick Port", choices, current);
-	if (i >= 0)
-		set_port(port, names[i]);
-}
-
-static void choose_pad(int n)
-{
-	static const char *const choices[] = {
-		"Automatic", "Gamepad 1", "Gamepad 2", "Gamepad 3", "Gamepad 4", "None", NULL
-	};
-	const char *name = n == 0 ? "joy1_pad" : "joy2_pad";
-	int value = host_option_int(name, 0);
-	int current = value < 0 ? 5 : value > 4 ? 0 : value;
-	int i = osd_choose(n == 0 ? "Gamepad for Joystick 1" : "Gamepad for Joystick 2",
-	                   choices, current);
-	if (i >= 0) {
-		save_setting_int(name, i == 5 ? -1 : i);
-		bmcoco_joystick_settings_changed();
-	}
-}
-
-static const char *pad_name(int n)
-{
-	static char text[2][32];
-	int pad = bmcoco_joystick_pad(n);
-	if (pad < 0)
-		return "None";
-	snprintf(text[n], sizeof(text[n]), "Gamepad %d%s", pad + 1,
-	         host_pad_state(pad) < 0 ? " (-)" : "");
-	return text[n];
-}
-
-/* Shows the joysticks as the CoCo sees them, until a key is pressed on the
-   keyboard (the gamepads' buttons are being tested). */
-static void joystick_test(void)
-{
-	for (;;) {
-		char text[512];
-		int port, len = 0, key;
-		int buttons = joystick_read_buttons();
-		for (port = 0; port < 2; port++) {
-			int x = joystick_read_axis(port, 0) >> 10;
-			int y = joystick_read_axis(port, 1) >> 10;
-			int b1 = buttons & (port == 0 ? 1 : 2);
-			int b2 = buttons & (port == 0 ? 4 : 8);
-			len += snprintf(text + len, sizeof(text) - len,
-			                "%s port: %s\n  X %2d  Y %2d  Fire %s  Fire 2 %s\n\n",
-			                port == 0 ? "Right" : "Left",
-			                joystick_name(state.joystick_id[port]),
-			                x, y, b1 ? "ON " : "off", b2 ? "ON " : "off");
-		}
-		snprintf(text + len, sizeof(text) - len,
-		         "Positions go from 0 to 63, as the CoCo reads them.");
-		osd_show_text("Joystick Test", text, "Press a key to go back");
-		key = osd_poll_key(FALSE);
-		if (key != OSD_KEY_NONE)
-			return;
-	}
-}
-
-static void joysticks_menu(void)
-{
-	enum { J_RIGHT, J_LEFT, J_SWAP, J_PAD1, J_PAD2, J_GPIO, J_TEST };
-	int sel = 0;
-	for (;;) {
-		struct osd_item items[] = {
-			{"Right Port", joystick_name(state.joystick_id[0]), OSD_ITEM_SUBMENU, J_RIGHT},
-			{"Left Port", joystick_name(state.joystick_id[1]), OSD_ITEM_SUBMENU, J_LEFT},
-			{"Swap Ports", NULL, 0, J_SWAP},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Joystick 1 from", pad_name(0), OSD_ITEM_SUBMENU, J_PAD1},
-			{"Joystick 2 from", pad_name(1), OSD_ITEM_SUBMENU, J_PAD2},
-			{"GPIO Joysticks (reboot)", NULL, check(setting_on("gpio_joysticks", FALSE)), J_GPIO},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Joystick Test", NULL, OSD_ITEM_SUBMENU, J_TEST},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Gamepad: A fire, B fire 2,", NULL, OSD_ITEM_LABEL, -1},
-			{"X Space, Y Enter.", NULL, OSD_ITEM_LABEL, -1},
-		};
-		int chosen = osd_menu("Joysticks", items, sizeof(items) / sizeof(items[0]), &sel);
-		switch (chosen) {
-		case J_RIGHT: choose_port(0); break;
-		case J_LEFT: choose_port(1); break;
-		case J_SWAP: {
-			struct joystick_config *r = joystick_config_by_id(state.joystick_id[0]);
-			struct joystick_config *l = joystick_config_by_id(state.joystick_id[1]);
-			ui_update_state(-1, ui_tag_joystick_port, 0, (void *) (intptr_t) state.joystick_id[1]);
-			ui_update_state(-1, ui_tag_joystick_port, 1, (void *) (intptr_t) (r ? r->id : 0));
-			if (l != NULL)
-				save_setting("joy_right", l->name);
-			if (r != NULL)
-				save_setting("joy_left", r->name);
-			break;
-		}
-		case J_PAD1: choose_pad(0); break;
-		case J_PAD2: choose_pad(1); break;
-		case J_GPIO:
-			save_setting("gpio_joysticks", setting_on("gpio_joysticks", FALSE) ? "0" : "1");
-			reboot_needed = TRUE;
-			break;
-		case J_TEST: joystick_test(); break;
-		default: return;
-		}
-	}
+	bmapple2_request_power(off);
+	bmapple2_idle();
 }
 
 /* ---- Video -------------------------------------------------------------- */
@@ -587,55 +74,22 @@ static const char *vsync_mode(void)
 		return "On";
 	if (strcmp(mode, "off") == 0 || strcmp(mode, "0") == 0)
 		return "Off";
-	return bmcoco_vsync_locked() ? "Auto (locked)" : "Auto (timer)";
+	return bmapple2_vsync_locked() ? "Auto (locked)" : "Auto (timer)";
 }
 
 static void video_menu(void)
 {
-	enum { V_TV, V_CCR, V_PICTURE, V_VSYNC, V_SHADER, V_SMOOTH };
+	enum { V_VSYNC, V_SHADER, V_SMOOTH };
 	int sel = 0;
 	for (;;) {
 		struct osd_item items[] = {
-			{"TV Input", enum_description(machine_tv_input_list, state.tv_input),
-			 OSD_ITEM_SUBMENU, V_TV},
-			{"Artifact Colours", enum_description(vo_cmp_ccr_list, state.ccr),
-			 OSD_ITEM_SUBMENU, V_CCR},
-			{"Picture Area", enum_description(vo_viewport_list, state.picture),
-			 OSD_ITEM_SUBMENU, V_PICTURE},
 			{"Frame Lock", vsync_mode(), OSD_ITEM_SUBMENU, V_VSYNC},
 			{"CRT Effect (reboot)", NULL, check(setting_on("crt_shader", FALSE)), V_SHADER},
 			{"Smooth Scaling (reboot)", NULL, check(setting_on("smooth", FALSE)), V_SMOOTH},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Composite shows the artifact colours", NULL, OSD_ITEM_LABEL, -1},
-			{"CoCo games use; if red and blue are", NULL, OSD_ITEM_LABEL, -1},
-			{"swapped, choose the other phase.", NULL, OSD_ITEM_LABEL, -1},
 		};
 		int chosen = osd_menu("Video", items, sizeof(items) / sizeof(items[0]), &sel);
 		int i;
 		switch (chosen) {
-		case V_TV:
-			i = choose_enum("TV Input", machine_tv_input_list, state.tv_input);
-			if (i >= 0) {
-				ui_update_state(-1, ui_tag_tv_input, machine_tv_input_list[i].value, NULL);
-				save_setting("tv_input", machine_tv_input_list[i].name);
-			}
-			break;
-		case V_CCR:
-			i = choose_enum("Artifact Colours", vo_cmp_ccr_list, state.ccr);
-			if (i >= 0) {
-				ui_update_state(-1, ui_tag_ccr, vo_cmp_ccr_list[i].value, NULL);
-				save_setting("artifacts", vo_cmp_ccr_list[i].name);
-			}
-			break;
-		case V_PICTURE: {
-			/* "auto" isn't a picture area of its own. */
-			i = choose_enum("Picture Area", vo_viewport_list + 1, state.picture);
-			if (i >= 0) {
-				ui_update_state(-1, ui_tag_picture, vo_viewport_list[i + 1].value, NULL);
-				save_setting("picture", vo_viewport_list[i + 1].name);
-			}
-			break;
-		}
 		case V_VSYNC: {
 			static const char *const choices[] = {
 				"Automatic", "On: follow the display", "Off: keep exact time", NULL
@@ -646,7 +100,7 @@ static void video_menu(void)
 			i = osd_choose("Frame Lock", choices, current);
 			if (i >= 0) {
 				save_setting("vsync", values[i]);
-				bmcoco_video_settings_changed();
+				bmapple2_video_settings_changed();
 			}
 			break;
 		}
@@ -664,89 +118,32 @@ static void video_menu(void)
 	}
 }
 
-/* ---- Keyboard ------------------------------------------------------------- */
-
-static void keyboard_menu(void)
-{
-	enum { K_TRANSLATE, K_LAYOUT };
-	int sel = 0;
-	for (;;) {
-		struct osd_item items[] = {
-			{"Typed Characters", NULL, check(state.kbd_translate), K_TRANSLATE},
-			{"Layout", enum_description(hkbd_lang_list, state.hkbd_lang),
-			 OSD_ITEM_SUBMENU, K_LAYOUT},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Off: keys are where the CoCo's are", NULL, OSD_ITEM_LABEL, -1},
-			{"(best for games).", NULL, OSD_ITEM_LABEL, -1},
-			{"On: Shift+2 types \", and so on, as", NULL, OSD_ITEM_LABEL, -1},
-			{"printed on your keyboard.", NULL, OSD_ITEM_LABEL, -1},
-			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Esc BREAK, Home CLEAR, Alt ALT,", NULL, OSD_ITEM_LABEL, -1},
-			{"Caps Lock/Windows CTRL, F1 F2.", NULL, OSD_ITEM_LABEL, -1},
-			{"F10 Reset, F11 Turbo, F12 Menu.", NULL, OSD_ITEM_LABEL, -1},
-		};
-		int chosen = osd_menu("Keyboard", items, sizeof(items) / sizeof(items[0]), &sel);
-		int i;
-		switch (chosen) {
-		case K_TRANSLATE:
-			ui_update_state(-1, ui_tag_kbd_translate, UI_NEXT, NULL);
-			save_setting("typed_keys", state.kbd_translate ? "1" : "0");
-			break;
-		case K_LAYOUT:
-			i = choose_enum("Keyboard Layout", hkbd_lang_list, state.hkbd_lang);
-			if (i >= 0) {
-				ui_update_state(-1, ui_tag_hkbd_lang, hkbd_lang_list[i].value, NULL);
-				save_setting("keyboard", hkbd_lang_list[i].name);
-			}
-			break;
-		default:
-			return;
-		}
-	}
-}
-
 /* ---- Sound ---------------------------------------------------------------- */
 
 static void sound_menu(void)
 {
-	enum { S_VOLUME, S_OUTPUT };
+	enum { S_OUTPUT };
 	static const char *const outputs[] = {"auto", "hdmi", "analog"};
 	static const char *const output_names[] = {"Automatic", "HDMI", "Headphone jack", NULL};
 	int sel = 0;
 	for (;;) {
-		char volume[16];
 		const char *out = host_option("audio_out", "auto");
 		int out_index = strcmp(out, "hdmi") == 0 ? 1
 		                : strcmp(out, "analog") == 0 || strcmp(out, "headphones") == 0 ? 2 : 0;
 		struct osd_item items[] = {
-			{"Volume", volume, OSD_ITEM_SUBMENU, S_VOLUME},
 			{"Output (reboot)", output_names[out_index], OSD_ITEM_SUBMENU, S_OUTPUT},
+			{"", NULL, OSD_ITEM_LABEL, -1},
+			{"The IIgs's volume is set in its", NULL, OSD_ITEM_LABEL, -1},
+			{"Control Panel (Ctrl+Cmd+Esc).", NULL, OSD_ITEM_LABEL, -1},
 		};
-		int chosen, i;
-		snprintf(volume, sizeof(volume), "%d%%", host_option_int("volume", 70));
-		chosen = osd_menu("Sound", items, 2, &sel);
-		switch (chosen) {
-		case S_VOLUME: {
-			static const char *const levels[] = {
-				"0%", "10%", "20%", "30%", "40%", "50%", "60%", "70%", "80%",
-				"90%", "100%", NULL
-			};
-			i = osd_choose("Volume", levels, (host_option_int("volume", 70) + 5) / 10);
-			if (i >= 0) {
-				ui_update_state(-1, ui_tag_gain, i * 10, NULL);
-				save_setting_int("volume", i * 10);
-			}
-			break;
-		}
-		case S_OUTPUT:
-			i = osd_choose("Sound Output", output_names, out_index);
-			if (i >= 0 && i != out_index) {
-				save_setting("audio_out", outputs[i]);
-				reboot_needed = TRUE;
-			}
-			break;
-		default:
+		int chosen = osd_menu("Sound", items, sizeof(items) / sizeof(items[0]), &sel);
+		int i;
+		if (chosen != S_OUTPUT)
 			return;
+		i = osd_choose("Sound Output", output_names, out_index);
+		if (i >= 0 && i != out_index) {
+			save_setting("audio_out", outputs[i]);
+			reboot_needed = TRUE;
 		}
 	}
 }
@@ -757,7 +154,7 @@ static char wifi_ssid[33], wifi_psk[64], wifi_country[3];
 
 static void wpa_path(char *path, size_t size)
 {
-	const char *root = bmcoco_sd_root();
+	const char *root = bmapple2_sd_root();
 	size_t len = strlen(root);
 	snprintf(path, size, "%s%s%s", root, len > 0 && root[len - 1] == '/' ? "" : "/", WPA_CONFIG);
 }
@@ -982,30 +379,29 @@ static void network_menu(void)
 
 /* ---- Information ----------------------------------------------------------- */
 
+extern const char g_kegs_version_str[];   /* sim65816.c */
+
 static void about(void)
 {
 	char text[640], status[64];
-	const char *missing = bmcoco_missing_roms();
+	const char *rom = bmapple2_rom_file();
 	int w, h;
 	host_display_size(&w, &h);
 	host_network_status(status, sizeof(status));
 	snprintf(text, sizeof(text),
-	         "BMCoco " BMCOCO_VERSION "\n"
-	         "Bare metal Tandy Color Computer\n"
-	         "emulator for the Raspberry Pi.\n\n"
-	         "Emulation: XRoar " XROAR_VERSION "\n"
-	         "by Ciaran Anscomb (GPL 3).\n"
-	         "Based on BMA800XL and BMC64.\n\n"
-	         "Machine: %s\n"
-	         "ROMs: %s\n"
-	         "%s\n"
+	         "BMApple2 " BMAPPLE2_VERSION "\n"
+	         "Bare metal Apple IIgs emulator\n"
+	         "for the Raspberry Pi.\n\n"
+	         "Emulation: KEGS %s\n"
+	         "by Kent Dickey (GPL 3).\n"
+	         "Based on BMCoco, BMA800XL and BMC64.\n\n"
+	         "ROM: %s\n"
 	         "Display: %dx%d %.2f Hz\n"
-	         "Machine: %.2f Hz, %s\n"
+	         "IIgs: %.2f Hz, %s\n"
 	         "Network: %s",
-	         machine_name(), missing ? "MISSING" : "OK", missing ? missing : "",
-	         w, h, bmcoco_refresh_rate(), bmcoco_machine_rate(),
-	         bmcoco_vsync_locked() ? "locked to display" : "timer paced", status);
-	osd_info("About BMCoco", text);
+	         g_kegs_version_str, rom ? rom : "(none)", w, h, bmapple2_refresh_rate(), VBL_RATE,
+	         bmapple2_vsync_locked() ? "locked to display" : "timer paced", status);
+	osd_info("About BMApple2", text);
 }
 
 static void offer_reboot(void)
@@ -1016,59 +412,44 @@ static void offer_reboot(void)
 
 /* ---- Main menu ---------------------------------------------------------------- */
 
-void bmcoco_menu(void)
+void bmapple2_menu(void)
 {
-	enum {
-		M_RUN, M_DISKS, M_TAPE, M_CART, M_MACHINE, M_JOYSTICKS, M_VIDEO, M_KEYBOARD,
-		M_SOUND, M_NETWORK, M_TURBO, M_RESET, M_HARD_RESET, M_ABOUT, M_REBOOT, M_OFF
-	};
-	static int sel = 2;
+	enum { M_KEGS, M_RESET, M_RESTART, M_VIDEO, M_SOUND, M_NETWORK, M_ABOUT, M_REBOOT, M_OFF };
+	static int sel = 0;
 	char title[48];
 
-	snprintf(title, sizeof(title), "BMCoco %s", BMCOCO_VERSION);
+	snprintf(title, sizeof(title), "BMApple2 %s", BMAPPLE2_VERSION);
 	reboot_needed = FALSE;
 	osd_open();
 	for (;;) {
 		struct osd_item items[] = {
-			{machine_name(), NULL, OSD_ITEM_LABEL, -1},
+			{"KEGS Settings (F4)", NULL, OSD_ITEM_SUBMENU, M_KEGS},
+			{"Reset (Ctrl+F12)", NULL, 0, M_RESET},
+			{"Restart (boot again)", NULL, 0, M_RESTART},
 			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Run a Program", NULL, OSD_ITEM_SUBMENU, M_RUN},
-			{"Disk Drives", NULL, OSD_ITEM_SUBMENU, M_DISKS},
-			{"Cassette", NULL, OSD_ITEM_SUBMENU, M_TAPE},
-			{"Cartridge", cart_name(state.cart_id), OSD_ITEM_SUBMENU, M_CART},
-			{"Machine", NULL, OSD_ITEM_SUBMENU, M_MACHINE},
-			{"Joysticks", NULL, OSD_ITEM_SUBMENU, M_JOYSTICKS},
 			{"Video", NULL, OSD_ITEM_SUBMENU, M_VIDEO},
-			{"Keyboard", NULL, OSD_ITEM_SUBMENU, M_KEYBOARD},
 			{"Sound", NULL, OSD_ITEM_SUBMENU, M_SOUND},
 			{"Network", NULL, OSD_ITEM_SUBMENU, M_NETWORK},
-			{"Turbo (F11)", NULL, check(bmcoco_turbo()), M_TURBO},
-			{"Reset (F10)", NULL, 0, M_RESET},
-			{"Hard Reset (Shift+F10)", NULL, 0, M_HARD_RESET},
 			{"About", NULL, OSD_ITEM_SUBMENU, M_ABOUT},
+			{"", NULL, OSD_ITEM_LABEL, -1},
 			{"Reboot", NULL, 0, M_REBOOT},
 			{"Shut Down", NULL, 0, M_OFF},
+			{"", NULL, OSD_ITEM_LABEL, -1},
+			{"Disks, ROM, speed: KEGS Settings.", NULL, OSD_ITEM_LABEL, -1},
 		};
 		int chosen = osd_menu(title, items, sizeof(items) / sizeof(items[0]), &sel);
 		int leave = FALSE;
 
 		switch (chosen) {
-		case M_RUN: leave = run_file(); break;
-		case M_DISKS: disks_menu(); break;
-		case M_TAPE: tape_menu(); break;
-		case M_CART: cart_menu(); break;
-		case M_MACHINE: machine_menu(); break;
-		case M_JOYSTICKS: joysticks_menu(); break;
+		case M_KEGS: bmapple2_kegs_config(); leave = TRUE; break;
+		case M_RESET: do_reset(); leave = TRUE; break;
+		case M_RESTART: bmapple2_restart(); leave = TRUE; break;
 		case M_VIDEO: video_menu(); break;
-		case M_KEYBOARD: keyboard_menu(); break;
 		case M_SOUND: sound_menu(); break;
 		case M_NETWORK: network_menu(); break;
-		case M_TURBO: bmcoco_set_turbo(!bmcoco_turbo()); leave = TRUE; break;
-		case M_RESET: xroar_soft_reset(); leave = TRUE; break;
-		case M_HARD_RESET: xroar_hard_reset(); leave = TRUE; break;
 		case M_ABOUT: about(); break;
 		case M_REBOOT:
-			if (osd_confirm("Reboot", "Reboot BMCoco?"))
+			if (osd_confirm("Reboot", "Reboot BMApple2?"))
 				power(0);
 			break;
 		case M_OFF:

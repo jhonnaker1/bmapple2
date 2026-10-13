@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Builds the third party libraries (circle-stdlib: Circle and newlib, and the
-# Circle addons) and then the BMCoco kernel for one board:
+# Circle addons) and then the BMApple2 kernel for one board:
 #
 #   ./make_all.sh [pi2|pi3|pi4] [--skip-patches]
 #
@@ -44,20 +44,20 @@ case "$RASPI" in
 esac
 if [ "$RASPI" = "4" ]
 then
-    export BMCOCO_AARCH=64
+    export BMAPPLE2_AARCH=64
     CONFIGURE_PREFIX=(-p aarch64-none-elf-)
 else
-    export BMCOCO_AARCH=32
+    export BMAPPLE2_AARCH=32
     CONFIGURE_PREFIX=()
 fi
 
 if [ ! -f "$SRC_DIR/sdcard/config.txt" ]
 then
-    echo "Must be run from the BMCoco root directory." >&2
+    echo "Must be run from the BMApple2 root directory." >&2
     exit 1
 fi
 
-# newlib only uses makeinfo for its manuals, which BMCoco doesn't need.
+# newlib only uses makeinfo for its manuals, which BMApple2 doesn't need.
 # Without it, a stand-in writes empty ones.
 if ! command -v makeinfo >/dev/null 2>&1
 then
@@ -120,10 +120,10 @@ then
     nproc() { sysctl -n hw.ncpu; }
 fi
 
-if [ ! -f "$CIRCLE_HOME/Rules.mk" ] || [ ! -f "$SRC_DIR/third_party/xroar/src/xroar.c" ]
+if [ ! -f "$CIRCLE_HOME/Rules.mk" ] || [ ! -f "$SRC_DIR/third_party/kegs/src/sim65816.c" ]
 then
     echo "Fetching submodules..."
-    git -C "$SRC_DIR" submodule update --init third_party/xroar third_party/circle-stdlib
+    git -C "$SRC_DIR" submodule update --init third_party/kegs third_party/circle-stdlib
     git -C "$CIRCLE_STDLIB" submodule update --init libs/circle libs/circle-newlib
     git -C "$CIRCLE_HOME" submodule update --init addon/wlan/hostap
 fi
