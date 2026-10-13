@@ -1,13 +1,15 @@
-## Unreleased
+## 0.2.0 – 2026-10-13
 
 - From BMA800XL 1.1.0: Raspberry Pi 4 B and Pi 400 support
-  - BMA800XL's own display driver, with the display run at the CoCo's
-    exact refresh rate (NTSC or PAL) on either HDMI port
+  - BMA800XL's own display driver, on either HDMI port, with the display
+    run at an NTSC CoCo 1/2's exact refresh rate (59.92 Hz); the CoCo 3
+    and PAL CoCos lock to 60 or 50 Hz, as on a Pi 3 (docs/PI4.md)
   - CRT shader and smooth scaling
   - Sound on either HDMI port or the headphone jack
   - Pi 400: Shut Down switches it off; Fn+F10 shuts down
 - A keyboard's power key shuts down
 - Fix the smooth setting being stuck on for the Pi 2 and 3 (from BMA800XL)
+- The Pi 4 scaler and display driver tests run in CI
 
 ## 0.1.1 – 2026-10-12
 
