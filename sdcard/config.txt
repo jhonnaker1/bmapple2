@@ -27,8 +27,8 @@ armstub=armstub8-rpi4.bin
 # HDMI1 below).
 # The emulator's frames are locked to the display when its refresh rate
 # matches the CoCo's, which gives perfectly smooth scrolling. On the Pi 4
-# and Pi 400 BMCoco sets the exact rate itself, PAL or NTSC; hdmi_mode
-# only chooses the resolution there.
+# and Pi 400 BMCoco sets the display to an NTSC CoCo 1/2's exact rate
+# itself (the CoCo 3 and PAL CoCos stay at 60 or 50 Hz, see docs/PI4.md).
 disable_overscan=1
 hdmi_group=1
 hdmi_mode=4
