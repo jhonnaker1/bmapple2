@@ -126,6 +126,10 @@ int host_wifi_scan(struct host_wifi_ap *aps, int max);
 const char *host_model_name(void);
 /* The display's size in pixels. */
 void host_display_size(int *width, int *height);
+/* Asks for the display to refresh at FPS frames a second, where the host
+   can set the video mode (the Pi 4 with video_driver=kms). Returns TRUE if
+   the mode was changed; the refresh rate should then be measured again. */
+int host_display_match_rate(double fps);
 /* Writes a line of text to the log. */
 void host_log(const char *message);
 

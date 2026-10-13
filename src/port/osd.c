@@ -330,6 +330,12 @@ static int poll_input(int pads)
 				repeat_usage = -1;
 			continue;
 		}
+		if (usage == USAGE_POWER) {
+			/* Shut Down, as during play (platform.c). */
+			bmcoco_request_power(1);
+			closing = TRUE;
+			return OSD_KEY_MENU;
+		}
 		key = map_usage(usage);
 		if (key == OSD_KEY_NONE)
 			continue;

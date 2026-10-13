@@ -1,10 +1,11 @@
 #
-# BMCoco - bare metal Tandy Color Computer emulator for the Raspberry Pi 2 and 3
+# BMCoco - bare metal Tandy Color Computer emulator for the Raspberry Pi 2, 3 and 4
 #
 # Raspberry Pi firmware settings. Emulator options are in cmdline.txt.
 #
 
-# BMCoco runs in 32 bit mode, with a kernel for each board.
+# BMCoco runs in 32 bit mode on the Pi 2 and 3, and in 64 bit mode on the
+# Pi 4, with a kernel for each board.
 arm_64bit=0
 [pi2]
 kernel=kernel7.img
@@ -12,15 +13,32 @@ kernel=kernel7.img
 kernel=kernel8-32.img
 [pi02]
 kernel=kernel8-32.img
+# The Pi 4 B and Pi 400 (both match [pi4]). As in Circle's boot/config64.txt:
+# 64 bit mode, the kernel loaded at 0x80000, and Circle's ARM stub.
+[pi4]
+arm_64bit=1
+kernel_address=0x80000
+kernel=kernel8-rpi4.img
+armstub=armstub8-rpi4.bin
 [all]
 
 # Video: 1280x720 at 60 Hz, the right rate for an NTSC CoCo (the default).
-# For a PAL CoCo or a Dragon use 50 Hz instead: hdmi_mode=19
+# For a PAL CoCo or a Dragon use 50 Hz instead: hdmi_mode=19 (here and for
+# HDMI1 below).
 # The emulator's frames are locked to the display when its refresh rate
-# matches the CoCo's, which gives perfectly smooth scrolling.
+# matches the CoCo's, which gives perfectly smooth scrolling. On the Pi 4
+# and Pi 400 BMCoco sets the exact rate itself, PAL or NTSC; hdmi_mode
+# only chooses the resolution there.
 disable_overscan=1
 hdmi_group=1
 hdmi_mode=4
+
+# The same for the Pi 4's second HDMI port (HDMI1), which the lines above
+# don't cover.
+[HDMI:1]
+hdmi_group=1
+hdmi_mode=4
+[all]
 
 # Other useful modes (hdmi_group=1):
 #   hdmi_mode=19  720p  50 Hz        hdmi_mode=4   720p  60 Hz

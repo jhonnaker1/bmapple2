@@ -40,7 +40,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/bmcoco/toolchains
-          key: arm-gnu-toolchain-15.2.rel1
+          key: arm-gnu-toolchain-15.2.rel1-arm-none-eabi-aarch64-none-elf
 
       - name: Test the emulator port on the PC
         run: tools/hostsim/run_tests.sh

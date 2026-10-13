@@ -19,6 +19,9 @@ WLAN_FIRMWARE=(
     brcmfmac43455-sdio.bin
     brcmfmac43455-sdio.clm_blob
     brcmfmac43455-sdio.txt
+    brcmfmac43456-sdio.bin
+    brcmfmac43456-sdio.txt
+    brcmfmac43456-sdio.clm_blob
 )
 
 WLAN_LICENSES=(

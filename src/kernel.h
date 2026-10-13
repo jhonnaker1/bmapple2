@@ -33,13 +33,23 @@
 #include <circle/usb/usbhcidevice.h>
 #include <circle/usb/usbkeyboard.h>
 #include <fatfs/ff.h>
-#include <vc4/vchiq/vchiqdevice.h>
 
-#include "fbl.h"
 #include "host.h"
 #include "logging.h"
 #include "options.h"
+
+// The Pi 2 and 3 show the picture and play sound through the VideoCore
+// (dispmanx and VCHIQ, from BMC64); the Pi 4 through Circle's framebuffer
+// and HDMI sound drivers (src/pi4/).
+#if RASPPI >= 4
+#include "pi4/sound.h"
+#include "pi4/video.h"
+#else
+#include <vc4/vchiq/vchiqdevice.h>
+
+#include "fbl.h"
 #include "vchiqsound.h"
+#endif
 
 #define MAX_KEYBOARDS 4
 
@@ -67,6 +77,7 @@ public:
   // Called (through host.h) from the emulator on core 1.
   int VideoInit(int width, int height, uint16_t **pixels, int *pitch);
   void DisplaySize(int *width, int *height);
+  bool DisplayMatchRate(double fps);
   void VideoSetView(int x, int y, int w, int h, double aspect);
   void VideoPresent(int wait_vsync);
   unsigned SoundOpen(unsigned freq, int channels, unsigned latency_frames);
@@ -120,18 +131,25 @@ private:
   CLogger mLogger;
   CScheduler mScheduler;
   CGPIOManager mGPIOManager;
+#if RASPPI <= 3
   CVCHIQDevice mVCHIQ;
+#endif
   CEMMCDevice mEMMC;
   FATFS mFileSystem;
   CUSBHCIDevice mUSBHCI;
   CConsole mConsole;
   CEmulatorCore mEmulatorCore;
 
+#if RASPPI >= 4
+  Pi4Video mVideo;
+  Pi4Sound mPi4Sound;
+#else
   FrameBufferLayer mFrameBuffer;
   VchiqSound *mSound;
   int mSoundChannels;
   int mVolume;
   TVCHIQSoundDestination mAudioOut;
+#endif
 
   // Keyboards. Each reports its own set of pressed keys; the emulator sees
   // the union of all of them.

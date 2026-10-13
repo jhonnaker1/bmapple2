@@ -8,7 +8,8 @@ seconds and can be switched off at any time.
 
 | File or folder   | What it is                                                  |
 |------------------|-------------------------------------------------------------|
-| `kernel8-32.img`, `kernel7.img` | BMCoco for the Pi 3 / Zero 2 W, and the Pi 2  |
+| `kernel8-32.img`, `kernel7.img`, `kernel8-rpi4.img` | BMCoco for the Pi 3 / Zero 2 W, the Pi 2, and the Pi 4 / Pi 400 |
+| `bootcode.bin`, `start.elf`, `fixup.dat`, `start4.elf`, `fixup4.dat`, `armstub8-rpi4.bin`, `*.dtb` | Raspberry Pi firmware |
 | `config.txt`     | Raspberry Pi firmware settings: the display mode            |
 | `cmdline.txt`    | BMCoco's options (see Options)                              |
 | `bmcoco.cfg`     | Settings changed in the menu (written by BMCoco)            |
@@ -65,7 +66,7 @@ next item starting with it.
 | Turbo          | Run as fast as the Pi can (also F11) |
 | Reset, Hard Reset | The reset button (F10), or power off and on (Shift+F10) |
 | About          | Versions, the machine, ROM status, display and network |
-| Reboot, Shut Down | Restart BMCoco, or halt the Pi |
+| Reboot, Shut Down | Restart BMCoco, or halt the Pi. Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
 
 Settings changed in the menu are kept in `bmcoco.cfg` and used at the next
 boot.
@@ -148,7 +149,8 @@ nothing notices). Otherwise the emulation keeps exact time and frames are
 shown as they come. The About page shows which is in use.
 
 For a PAL CoCo or a Dragon (50 Hz), choose it in *Machine* and set
-`hdmi_mode=19` (720p 50 Hz) in `config.txt`. `vsync=on` or `vsync=off` in
+`hdmi_mode=19` (720p 50 Hz) in `config.txt` (on a Pi 2 or 3; a Pi 4 sets
+the display to the machine's exact rate itself, NTSC or PAL). `vsync=on` or `vsync=off` in
 `cmdline.txt` (or *Frame Lock* in the menu) forces one or the other.
 
 **Artifact colours**: many CoCo 1/2 games draw in PMODE 4 and rely on the
@@ -193,7 +195,8 @@ The web UI has:
 - **Dashboard**: the Pi's model, address, uptime, temperature, power and
   throttling warnings and free space on the card. Buttons to **Hard Reset**
   the CoCo (power it off and on), **Reboot** BMCoco, **Shut Down** (the
-  Pi halts; switch it off, then on again to restart), and **Disable Web UI**
+  Pi halts; switch it off, then on again to restart; a Pi 400 switches
+  itself off, and its power key starts it again), and **Disable Web UI**
   until the next reboot.
 - **Files**: browse the SD card; upload (or drag and drop) files into a
   folder, download, rename, delete, and create folders. Clicking a disk
@@ -237,7 +240,8 @@ web UI.
 | `crt_shader`        | `0`, `1`                     | `0`      | CRT look (scanlines) from BMC64 |
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
 | `vsync`             | `auto`, `on`, `off`          | `auto`   | Lock frames to the display (see Display and timing) |
-| `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes |
+| `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`    | Pi 4 only: `kms` runs the display at the CoCo's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
+| `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |
 | `volume`            | 0 to 100                     | `70`     | Sound volume |
 | `audio_buffer_ms`   | 20 to 500                    | `60`     | Sound buffer; raise it if the sound breaks up |
 | `keyboard`          | `us`, `gb`, `de`, `fr`, ... (XRoar's `-kbd-lang`) | `us` | PC keyboard layout |

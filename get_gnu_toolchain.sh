@@ -3,23 +3,37 @@
 # Source this file to put the Arm GNU Toolchain used by BMCoco on PATH.
 #
 #   source ./get_gnu_toolchain.sh
+#   BMCOCO_AARCH=64 source ./get_gnu_toolchain.sh   (64-bit, for the Pi 4)
 #
 # The pinned release is downloaded into ~/.cache/bmcoco/toolchains the
-# first time. A matching toolchain already on PATH, or in $ARM_HOME, is used
-# as it is. Set BMCOCO_ALLOW_ANY_TOOLCHAIN=1 to accept whatever
-# arm-none-eabi-gcc is on PATH (for example the distribution's package) when
-# the pinned release cannot be downloaded.
+# first time. A matching toolchain already on PATH, or in $ARM_HOME
+# ($AARCH64_HOME for 64-bit), is used as it is. Set
+# BMCOCO_ALLOW_ANY_TOOLCHAIN=1 to accept whatever arm-none-eabi-gcc (or
+# aarch64-none-elf-gcc) is on PATH when the pinned release cannot be
+# downloaded.
+#
+# 32-bit kernels use the arm-none-eabi toolchain, 64-bit ones the
+# aarch64-none-elf toolchain Circle expects (PREFIX64 in Circle's Rules.mk).
+# Both come from the same Arm GNU Toolchain release, built for this
+# computer: Linux (x86_64 or aarch64) or macOS (Apple silicon or Intel).
 
 TOOLCHAIN_VERSION=15.2.1
 TOOLCHAIN_RELEASE=15.2.rel1
-# The build for this computer: Linux (x86_64 or aarch64) or macOS.
+if [ "${BMCOCO_AARCH:-32}" = "64" ]
+then
+    TOOLCHAIN_TARGET=aarch64-none-elf
+    TOOLCHAIN_HOME_VAR=AARCH64_HOME
+else
+    TOOLCHAIN_TARGET=arm-none-eabi
+    TOOLCHAIN_HOME_VAR=ARM_HOME
+fi
 case "$(uname -s)-$(uname -m)" in
     Darwin-arm64) TOOLCHAIN_HOST=darwin-arm64 ;;
     Darwin-x86_64) TOOLCHAIN_HOST=darwin-x86_64 ;;
     Linux-aarch64|Linux-arm64) TOOLCHAIN_HOST=aarch64 ;;
     *) TOOLCHAIN_HOST=x86_64 ;;
 esac
-TOOLCHAIN_NAME=arm-gnu-toolchain-${TOOLCHAIN_RELEASE}-${TOOLCHAIN_HOST}-arm-none-eabi
+TOOLCHAIN_NAME=arm-gnu-toolchain-${TOOLCHAIN_RELEASE}-${TOOLCHAIN_HOST}-${TOOLCHAIN_TARGET}
 TOOLCHAIN_ARCHIVE=${TOOLCHAIN_NAME}.tar.xz
 TOOLCHAIN_URL=https://gitlab.arm.com/api/v4/projects/tooling%2Fgnu-toolchains-for-arm/packages/generic/gnu-toolchain/${TOOLCHAIN_RELEASE}/${TOOLCHAIN_ARCHIVE}
 TOOLCHAIN_CACHE=${XDG_CACHE_HOME:-$HOME/.cache}/bmcoco/toolchains
@@ -27,19 +41,20 @@ TOOLCHAIN_HOME=${BMCOCO_TOOLCHAIN_HOME:-$TOOLCHAIN_CACHE/$TOOLCHAIN_NAME}
 
 toolchain_is_valid()
 {
-    [ -x "$1/bin/arm-none-eabi-gcc" ] &&
-        [ "$("$1/bin/arm-none-eabi-gcc" -dumpfullversion 2>/dev/null)" = "$TOOLCHAIN_VERSION" ]
+    [ -x "$1/bin/$TOOLCHAIN_TARGET-gcc" ] &&
+        [ "$("$1/bin/$TOOLCHAIN_TARGET-gcc" -dumpfullversion 2>/dev/null)" = "$TOOLCHAIN_VERSION" ]
 }
 
 toolchain_use()
 {
-    export ARM_HOME=$1
-    export ARM_VERSION=$("$1/bin/arm-none-eabi-gcc" -dumpfullversion)
+    export "$TOOLCHAIN_HOME_VAR=$1"
+    local version
+    version=$("$1/bin/$TOOLCHAIN_TARGET-gcc" -dumpfullversion)
     case ":$PATH:" in
-        *":$ARM_HOME/bin:"*) ;;
-        *) export PATH=$ARM_HOME/bin:$PATH ;;
+        *":$1/bin:"*) ;;
+        *) export PATH=$1/bin:$PATH ;;
     esac
-    echo "Using Arm GNU Toolchain $ARM_VERSION: $ARM_HOME"
+    echo "Using Arm GNU Toolchain $version ($TOOLCHAIN_TARGET): $1"
 }
 
 toolchain_download()
@@ -73,12 +88,12 @@ toolchain_download()
     rmdir "$install_path"
 }
 
-if toolchain_is_valid "${ARM_HOME:-}"
+if toolchain_is_valid "${!TOOLCHAIN_HOME_VAR:-}"
 then
-    TOOLCHAIN_HOME=$ARM_HOME
-elif command -v arm-none-eabi-gcc >/dev/null 2>&1
+    TOOLCHAIN_HOME=${!TOOLCHAIN_HOME_VAR}
+elif command -v $TOOLCHAIN_TARGET-gcc >/dev/null 2>&1
 then
-    path_toolchain=$(dirname "$(dirname "$(readlink -f "$(command -v arm-none-eabi-gcc)")")")
+    path_toolchain=$(dirname "$(dirname "$(readlink -f "$(command -v $TOOLCHAIN_TARGET-gcc)")")")
     if toolchain_is_valid "$path_toolchain"
     then
         TOOLCHAIN_HOME=$path_toolchain
@@ -93,12 +108,12 @@ fi
 if toolchain_is_valid "$TOOLCHAIN_HOME"
 then
     toolchain_use "$TOOLCHAIN_HOME"
-elif [ "${BMCOCO_ALLOW_ANY_TOOLCHAIN:-0}" = "1" ] && command -v arm-none-eabi-gcc >/dev/null 2>&1
+elif [ "${BMCOCO_ALLOW_ANY_TOOLCHAIN:-0}" = "1" ] && command -v $TOOLCHAIN_TARGET-gcc >/dev/null 2>&1
 then
-    echo "WARNING: Arm GNU Toolchain $TOOLCHAIN_VERSION is not available." >&2
-    toolchain_use "$(dirname "$(dirname "$(readlink -f "$(command -v arm-none-eabi-gcc)")")")"
+    echo "WARNING: Arm GNU Toolchain $TOOLCHAIN_VERSION ($TOOLCHAIN_TARGET) is not available." >&2
+    toolchain_use "$(dirname "$(dirname "$(readlink -f "$(command -v $TOOLCHAIN_TARGET-gcc)")")")"
 else
-    echo "Arm GNU Toolchain $TOOLCHAIN_VERSION could not be installed." >&2
-    echo "Set BMCOCO_ALLOW_ANY_TOOLCHAIN=1 to build with the arm-none-eabi-gcc on PATH." >&2
+    echo "Arm GNU Toolchain $TOOLCHAIN_VERSION ($TOOLCHAIN_TARGET) could not be installed." >&2
+    echo "Set BMCOCO_ALLOW_ANY_TOOLCHAIN=1 to build with the $TOOLCHAIN_TARGET-gcc on PATH." >&2
     return 1 2>/dev/null || exit 1
 fi

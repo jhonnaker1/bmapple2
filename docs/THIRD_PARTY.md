@@ -12,7 +12,7 @@ See `third_party/xroar/` (from `https://www.6809.org.uk/git/xroar.git`, tag `1.1
 
 ## BMA800XL
 
-BMCoco is a fork of [BMA800XL](https://github.com/aminch/bma800xl), the bare metal Atari 800XL emulator for the Raspberry Pi, under the GNU General Public License version 3. Its kernel, display, sound, network and web UI code is used here.
+BMCoco is a fork of [BMA800XL](https://github.com/aminch/bma800xl), the bare metal Atari 800XL emulator for the Raspberry Pi, under the GNU General Public License version 3. Its kernel, display, sound, network and web UI code is used here, including BMA800XL 1.1.0's Raspberry Pi 4 display and sound drivers.
 
 ## circle-stdlib
 
@@ -28,9 +28,17 @@ See [BMC64](https://github.com/randyrossi/bmc64) for its source and its accompan
 
 ## Raspberry Pi Firmware
 
-BMCoco includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`) from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
+BMCoco includes the Raspberry Pi boot firmware (`bootcode.bin`, `start.elf`, `fixup.dat`, and for the Raspberry Pi 4 `start4.elf`, `fixup4.dat` and its device trees) from the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware).
 
 See the [Raspberry Pi firmware repository](https://github.com/raspberrypi/firmware/tree/master/boot) for its accompanying copyright and license information.
+
+## crt-pi
+
+BMCoco uses the crt-pi CRT shader by davej, as included in BMC64, under the [GNU General Public License version 2 or later](https://www.gnu.org/licenses/old-licenses/gpl-2.0.html).
+
+## Circle ARM stub
+
+For the Raspberry Pi 4, BMCoco includes `armstub8-rpi4.bin`, built from [Circle's `boot/armstub`](https://github.com/rsta2/circle/tree/master/boot/armstub) source, under Circle's [GNU General Public License version 3](https://github.com/rsta2/circle/blob/master/COPYING).
 
 ## Wi-Fi Firmware
 

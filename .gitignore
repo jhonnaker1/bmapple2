@@ -15,10 +15,14 @@ bmcoco-*.zip
 # PC test harness
 tools/hostsim/build/
 tools/hostsim/out/
+tools/pi4scaler/build/
+tools/pi4scaler/out/
+tools/pi4kms/build/
 sdcard_out/
 
 # Raspberry Pi firmware shipped on the SD card
 !sdcard/firmware/start.elf
+!sdcard/firmware/start4.elf
 
 # Local files
 docs/a*/*.md

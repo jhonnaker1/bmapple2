@@ -4,11 +4,12 @@
 # build/sdcard. Copy the contents of that folder to the root of a FAT32
 # formatted SD card.
 #
-#   ./build_sdcard.sh [pi2|pi3] [--skip-patches]
+#   ./build_sdcard.sh [pi2|pi3|pi4] [--skip-patches]
 #
 #   pi3     kernel8-32.img: Pi 3 and Pi Zero 2 W
 #   pi2     kernel7.img: Pi 2
-#   (none)  both, as a release has
+#   pi4     kernel8-rpi4.img and armstub8-rpi4.bin: Pi 4 B and Pi 400
+#   (none)  all of them, as a release has
 #
 # Without --skip-patches each board is built from clean_all.sh. With it, the
 # third party libraries already built are kept and only the kernel is
@@ -23,23 +24,24 @@ set -euo pipefail
 SRC_DIR=$(cd "$(dirname "$0")" && pwd)
 BUILD_DIR="$SRC_DIR/build"
 STAGING_DIR="$BUILD_DIR/sdcard"
-CIRCLE_CONFIG="$SRC_DIR/third_party/circle-stdlib/Config.mk"
-ALL_BOARDS=(pi2 pi3)
+# circle-stdlib's configure writes the board (RASPPI) into Circle's Config.mk.
+CIRCLE_CONFIG="$SRC_DIR/third_party/circle-stdlib/libs/circle/Config.mk"
+ALL_BOARDS=(pi2 pi3 pi4)
 BOARDS=()
 SKIP_PATCHES=0
 
 for arg in "$@"
 do
     case "$arg" in
-        pi2|pi3) BOARDS=("$arg") ;;
+        pi2|pi3|pi4) BOARDS=("$arg") ;;
         --skip-patches) SKIP_PATCHES=1 ;;
-        *) echo "Usage: $0 [pi2|pi3] [--skip-patches]" >&2; exit 1 ;;
+        *) echo "Usage: $0 [pi2|pi3|pi4] [--skip-patches]" >&2; exit 1 ;;
     esac
 done
 
 cd "$SRC_DIR"
 
-# The board circle-stdlib is built for (pi2, pi3), if any.
+# The board circle-stdlib is built for (pi2, pi3, pi4), if any.
 built_board() {
     local raspi
     raspi=$(sed -n 's/^RASPPI = //p' "$CIRCLE_CONFIG" 2>/dev/null || true)
@@ -53,6 +55,7 @@ kernel_name() {
     case "$1" in
         pi2) echo kernel7.img ;;
         pi3) echo kernel8-32.img ;;
+        pi4) echo kernel8-rpi4.img ;;
     esac
 }
 
@@ -104,6 +107,12 @@ do
     echo "=============================================================="
     if [ "$SKIP_PATCHES" -eq 1 ] && [ "$(built_board)" = "$board" ]
     then
+        if [ "$board" = "pi4" ]
+        then
+            export BMCOCO_AARCH=64
+        else
+            export BMCOCO_AARCH=32
+        fi
         source "$SRC_DIR/get_gnu_toolchain.sh"
         make -j"$(nproc)"
     else
@@ -117,6 +126,12 @@ do
         exit 1
     fi
     cp "$SRC_DIR/$kernel" "$STAGING_DIR/"
+    if [ "$board" = "pi4" ]
+    then
+        # Built by make_all.sh from Circle's boot/armstub; the next board's
+        # clean removes it, so it is copied now.
+        cp "$SRC_DIR/third_party/circle-stdlib/libs/circle/boot/armstub8-rpi4.bin" "$STAGING_DIR/"
+    fi
 done
 
 if ! "$SRC_DIR/check_release_files.sh" "$STAGING_DIR"

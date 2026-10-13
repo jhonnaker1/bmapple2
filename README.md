@@ -1,11 +1,16 @@
 # BMCoco
 
-BMCoco is a bare metal Tandy Color Computer emulator for the Raspberry Pi 2
-and 3. It runs the [XRoar](https://www.6809.org.uk/xroar/) emulator directly
+BMCoco is a bare metal Tandy Color Computer emulator for the Raspberry Pi 2,
+3 and 4. It runs the [XRoar](https://www.6809.org.uk/xroar/) emulator directly
 on the hardware, with no Linux underneath, the same way
 [BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64 and
-[BMA800XL](https://github.com/aminch/bma800xl) for the Atari 800XL. It is a
-fork of BMA800XL with the Atari emulator replaced by XRoar.
+[BMA800XL](https://github.com/aminch/bma800xl) for the Atari 800XL.
+
+BMCoco is based on [BMA800XL](https://github.com/aminch/bma800xl) by Adam
+Minchinton, which is based on [BMC64](https://github.com/randyrossi/bmc64) by
+Randy Rossi. It is a fork of BMA800XL with the Atari emulator replaced by
+XRoar; the kernel, display, sound, network and web UI come from those two
+projects.
 
 - Boots straight into Color BASIC in a couple of seconds
 - Emulates the CoCo 1, 2 and 3 (and, from the same code, the Dragon 32/64
@@ -41,8 +46,13 @@ the way XRoar, and so BMCoco, looks for them: copy the files from both its
 
 Raspberry Pi 3 Model B, B+ and A+, and the Raspberry Pi Zero 2 W
 (`kernel8-32.img`), and the Raspberry Pi 2 Model B (`kernel7.img`). The card
-has both kernels and each Pi starts its own. Video and sound go out over
+has a kernel for each and each Pi starts its own. Video and sound go out over
 HDMI; sound can also go to the 3.5mm jack.
+
+The Raspberry Pi 4 Model B and Pi 400 (`kernel8-rpi4.img`, 64-bit) are
+supported too, with the display run at the CoCo's exact refresh rate on either
+HDMI port, and sound over HDMI or the Pi 4 B's 3.5mm jack. See
+[docs/PI4.md](docs/PI4.md). (Pi 4 support comes from BMA800XL 1.1.0.)
 
 ## Getting started
 
@@ -106,7 +116,11 @@ src/port/menu.c, osd.c     The menu, drawn in the CoCo 3's font
 src/port/config.h, xroar.mk  XRoar's build options and source list
 third_party/xroar          XRoar (submodule)
 third_party/circle-stdlib  Circle and newlib (submodule)
+src/pi4/                   Pi 4 display, smooth scaling / CRT shader, HDMI sound
+src/pi4kms/                Pi 4 direct display driver (docs/PI4.md)
 tools/hostsim              Runs the emulator port on a PC for testing
+tools/pi4scaler            Tests the Pi 4's smooth scaling and CRT shader on a PC
+tools/pi4kms               Tests the Pi 4 display driver's calculations on a PC
 ```
 
 XRoar is used unmodified: everything specific to BMCoco is in `src/`.

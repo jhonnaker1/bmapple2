@@ -184,8 +184,14 @@ static void track_machine_rate(void)
 					machine_rate = rate;
 				else
 					machine_rate += (rate - machine_rate) * 0.01;
-				if (machine_rate == rate)
+				if (machine_rate == rate) {
+					/* A new machine, or NTSC/PAL changed: where the
+					   host can set the video mode (the Pi 4), run the
+					   display at the machine's rate, then time it. */
+					if (host_display_match_rate(rate))
+						measure_refresh_rate();
 					update_sync_mode();
+				}
 			}
 		}
 	}
@@ -655,6 +661,7 @@ static void handle_requests(void)
 	if (request_power >= 0) {
 		int power_off = request_power;
 		request_power = -1;
+		LOG_PRINT("%s\n", power_off ? "Shutting down" : "Rebooting");
 		/* Ejecting writes back changed disks. */
 		if (xroar.vdrive_interface != NULL) {
 			unsigned drive;
@@ -740,6 +747,14 @@ static void process_input(void)
 {
 	int usage, pressed, pad;
 	while (host_key_event(&usage, &pressed)) {
+		/* The power key: Shut Down. The Pi 400's keyboard sends it for
+		   Fn+F10 while the Pi is running (Raspberry Pi, "Have you tried
+		   turning it off and on again?", raspberrypi.com news, 2021). */
+		if (usage == USAGE_POWER) {
+			if (pressed)
+				bmcoco_request_power(1);
+			continue;
+		}
 		if (usage == KEY_MENU) {
 			if (pressed)
 				open_menu = TRUE;

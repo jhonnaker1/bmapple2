@@ -3,10 +3,12 @@
 # Builds the third party libraries (circle-stdlib: Circle and newlib, and the
 # Circle addons) and then the BMCoco kernel for one board:
 #
-#   ./make_all.sh [pi2|pi3] [--skip-patches]
+#   ./make_all.sh [pi2|pi3|pi4] [--skip-patches]
 #
 #   pi3 (default)  kernel8-32.img: Pi 3 and Pi Zero 2 W
 #   pi2            kernel7.img: Pi 2
+#   pi4            kernel8-rpi4.img: Pi 4 B and Pi 400, 64-bit, with
+#                  armstub8-rpi4.bin (see docs/PI4.md)
 #
 # --skip-patches leaves Circle as it is instead of resetting it and applying
 # src/patches/ again.
@@ -26,17 +28,28 @@ SKIP_PATCHES=0
 for arg in "$@"
 do
     case "$arg" in
-        pi2|pi3) BOARD=$arg ;;
+        pi2|pi3|pi4) BOARD=$arg ;;
         --skip-patches) SKIP_PATCHES=1 ;;
-        *) echo "Usage: $0 [pi2|pi3] [--skip-patches]" >&2; exit 1 ;;
+        *) echo "Usage: $0 [pi2|pi3|pi4] [--skip-patches]" >&2; exit 1 ;;
     esac
 done
 BOARD=${BOARD:-pi3}
 RASPI=${BOARD#pi}
+# The Pi 4 build is 64-bit (AArch64). Circle names its kernel
+# kernel8-rpi4.img (TARGET in Circle's Rules.mk for RASPPI=4, AARCH=64).
 case "$RASPI" in
     2) KERNEL=kernel7.img ;;
     3) KERNEL=kernel8-32.img ;;
+    4) KERNEL=kernel8-rpi4.img ;;
 esac
+if [ "$RASPI" = "4" ]
+then
+    export BMCOCO_AARCH=64
+    CONFIGURE_PREFIX=(-p aarch64-none-elf-)
+else
+    export BMCOCO_AARCH=32
+    CONFIGURE_PREFIX=()
+fi
 
 if [ ! -f "$SRC_DIR/sdcard/config.txt" ]
 then
@@ -78,7 +91,8 @@ do
 done
 
 # newlib and the addons would keep objects built for the other board.
-BUILT_FOR=$(sed -n 's/^RASPPI = //p' "$CIRCLE_STDLIB/Config.mk" 2>/dev/null || true)
+# (circle-stdlib's configure writes the board into Circle's Config.mk.)
+BUILT_FOR=$(sed -n 's/^RASPPI = //p' "$CIRCLE_HOME/Config.mk" 2>/dev/null || true)
 if [ -n "$BUILT_FOR" ] && [ "$BUILT_FOR" != "$RASPI" ]
 then
     echo "circle-stdlib is built for the Pi $BUILT_FOR. Run ./clean_all.sh first." >&2
@@ -136,16 +150,24 @@ echo "BUILD CIRCLE-STDLIB for Raspberry Pi $RASPI"
 echo "=============================================================="
 cd "$CIRCLE_STDLIB"
 find . -name config.cache -delete
-bash ./configure --raspberrypi=$RASPI --kernel-max-size 16
+bash ./configure --raspberrypi=$RASPI --kernel-max-size 16 "${CONFIGURE_PREFIX[@]}"
 make -C libs/circle clean >/dev/null 2>&1 || true
 make -j"$(nproc)"
 
 echo "=============================================================="
 echo "BUILD ADDONS"
 echo "=============================================================="
-for addon in fatfs linux vc4/vchiq vc4/interface/bcm_host vc4/interface/khronos \
-             vc4/interface/vmcs_host vc4/interface/vcos wlan \
-             wlan/hostap/wpa_supplicant
+# The Pi 2 and 3 show the picture and play sound through the VideoCore
+# (VCHIQ: dispmanx and the audio service). The Pi 4 build uses Circle's own
+# framebuffer and HDMI sound drivers instead and doesn't need those addons.
+if [ "$RASPI" = "4" ]
+then
+    ADDONS="fatfs wlan wlan/hostap/wpa_supplicant"
+else
+    ADDONS="fatfs linux vc4/vchiq vc4/interface/bcm_host vc4/interface/khronos
+            vc4/interface/vmcs_host vc4/interface/vcos wlan wlan/hostap/wpa_supplicant"
+fi
+for addon in $ADDONS
 do
     if [ "$addon" = "wlan/hostap/wpa_supplicant" ]
     then
@@ -154,6 +176,17 @@ do
         make -C "$CIRCLE_HOME/addon/$addon" -j"$(nproc)"
     fi
 done
+
+if [ "$RASPI" = "4" ]
+then
+    # The ARM stub the Pi 4's firmware starts the 64-bit kernel with; built
+    # from Circle's source (see Circle's boot/README, "FIQ support on
+    # Raspberry Pi 4, 400, CM4").
+    echo "=============================================================="
+    echo "BUILD ARMSTUB"
+    echo "=============================================================="
+    make -C "$CIRCLE_HOME/boot" armstub64
+fi
 
 echo "=============================================================="
 echo "BUILD KERNEL"

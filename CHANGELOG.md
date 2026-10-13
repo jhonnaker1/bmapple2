@@ -1,3 +1,14 @@
+## Unreleased
+
+- From BMA800XL 1.1.0: Raspberry Pi 4 B and Pi 400 support
+  - BMA800XL's own display driver, with the display run at the CoCo's
+    exact refresh rate (NTSC or PAL) on either HDMI port
+  - CRT shader and smooth scaling
+  - Sound on either HDMI port or the headphone jack
+  - Pi 400: Shut Down switches it off; Fn+F10 shuts down
+- A keyboard's power key shuts down
+- Fix the smooth setting being stuck on for the Pi 2 and 3 (from BMA800XL)
+
 ## 0.1.1 – 2026-10-12
 
 - Web UI in Color Computer colours: the VDG's green text screen, its

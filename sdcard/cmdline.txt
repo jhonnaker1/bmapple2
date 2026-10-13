@@ -1,1 +1,1 @@
-usbpowerdelay=1000 keyboard=us audio_out=auto
+usbpowerdelay=1000 audio_out=auto

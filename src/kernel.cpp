@@ -15,6 +15,8 @@
 #include <stdio.h>
 #include <string.h>
 
+#include <circle/bcmpropertytags.h>
+#include <circle/bcmwatchdog.h>
 #include <circle/machineinfo.h>
 #include <circle/startup.h>
 #include <circle/synchronize.h>
@@ -75,6 +77,12 @@ void CEmulatorCore::Run(unsigned nCore) {
     }
     bmcoco_main();
   }
+#if RASPPI >= 4
+  // Cores 2 and 3 help draw smoothed and CRT frames (src/pi4/video.h).
+  if (nCore >= 2) {
+    Pi4Video::WorkerLoop(nCore);
+  }
+#endif
 
   // Nothing else runs here.
   for (;;) {
@@ -88,12 +96,18 @@ void CEmulatorCore::Run(unsigned nCore) {
 
 CKernel::CKernel(void)
     : mLog(&mSerial), mTimer(&mInterrupt), mLogger(mKernelOptions.GetLogLevel(), &mTimer),
-      mGPIOManager(&mInterrupt), mVCHIQ(CMemorySystem::Get(), &mInterrupt),
+      mGPIOManager(&mInterrupt),
+#if RASPPI <= 3
+      mVCHIQ(CMemorySystem::Get(), &mInterrupt),
+#endif
       mEMMC(&mInterrupt, &mTimer, &mActLED),
       mUSBHCI(&mInterrupt, &mTimer, TRUE), mConsole(&mSerial, &mLog),
-      mEmulatorCore(CMemorySystem::Get()), mSound(0), mSoundChannels(0),
-      mVolume(VCHIQ_SOUND_VOLUME_DEFAULT),
-      mAudioOut(VCHIQSoundDestinationAuto), m_MergedModifiers(0),
+      mEmulatorCore(CMemorySystem::Get()),
+#if RASPPI <= 3
+      mSound(0), mSoundChannels(0), mVolume(VCHIQ_SOUND_VOLUME_DEFAULT),
+      mAudioOut(VCHIQSoundDestinationAuto),
+#endif
+      m_MergedModifiers(0),
       m_KeyQueueHead(0), m_KeyQueueTail(0), m_bGPIOJoysticks(false) {
   s_pThis = this;
   for (unsigned i = 0; i < MAX_KEYBOARDS; i++) {
@@ -112,9 +126,11 @@ CKernel::CKernel(void)
   }
   memset(m_pJoyPins, 0, sizeof m_pJoyPins);
 
+#if RASPPI <= 3
   // The emulator's display is the lowest dispmanx layer.
   mFrameBuffer.SetLayer(0);
   mFrameBuffer.SetTransparency(false);
+#endif
 }
 
 CKernel::~CKernel(void) {}
@@ -138,9 +154,11 @@ bool CKernel::Initialize(void) {
   if (!mGPIOManager.Initialize()) {
     return false;
   }
+#if RASPPI <= 3
   if (!mVCHIQ.Initialize()) {
     return false;
   }
+#endif
   if (!mEMMC.Initialize()) {
     return false;
   }
@@ -172,18 +190,48 @@ bool CKernel::Initialize(void) {
   }
 
   const char *audio_out = mOptions.Get("audio_out", "auto");
+
+  // Full scale: the volume (volume= in cmdline.txt and the menu) is
+  // XRoar's, so it can change while running.
+  const int volume = 100;
+
+#if RASPPI >= 4
+  // Display and sound are set up here, on core 0: Circle's sound drivers
+  // must be started on core 0 (see src/pi4/sound.h).
+  Pi4Sound::Output sound_output = Pi4Sound::Output::Auto;
+  if (strcmp(audio_out, "hdmi") == 0) {
+    sound_output = Pi4Sound::Output::Hdmi;
+  } else if (strcmp(audio_out, "analog") == 0 || strcmp(audio_out, "headphones") == 0) {
+    sound_output = Pi4Sound::Output::Headphones;
+  }
+  // video_driver: kms (the default), hvs or firmware (docs/PI4.md).
+  const char *video_driver = mOptions.Get("video_driver", "kms");
+  Pi4Video::Driver driver = Pi4Video::Driver::Kms;
+  if (strcmp(video_driver, "hvs") == 0) {
+    driver = Pi4Video::Driver::Hvs;
+  } else if (strcmp(video_driver, "firmware") == 0) {
+    driver = Pi4Video::Driver::Firmware;
+  }
+  if (!mVideo.Initialize(mOptions.GetBool("crt_shader", false),
+                         mOptions.GetBool("smooth", false),
+                         mOptions.GetBool("crt_curvature", false), driver)) {
+    return false;
+  }
+  // Without sound the emulator still runs.
+  mPi4Sound.Initialize(&mInterrupt, volume, sound_output);
+#else
   if (strcmp(audio_out, "hdmi") == 0) {
     mAudioOut = VCHIQSoundDestinationHDMI;
   } else if (strcmp(audio_out, "analog") == 0 ||
              strcmp(audio_out, "headphones") == 0) {
     mAudioOut = VCHIQSoundDestinationHeadphones;
   }
-
-  // Full scale: the volume (volume= in cmdline.txt and the menu) is
-  // XRoar's, so it can change while running.
+  // VCHIQ volume is in 1/100 dB: 0 dB.
+  (void)volume;
   mVolume = 0;
 
   FrameBufferLayer::Initialize();
+#endif
 
   if (mOptions.GetBool("gpio_joysticks", false)) {
     SetupGPIOJoysticks();
@@ -588,13 +636,70 @@ int CKernel::GpioJoystick(int port) {
 // Video
 //
 
+#if RASPPI >= 4
+
+int CKernel::VideoInit(int width, int height, uint16_t **pixels, int *pitch) {
+  return mVideo.Allocate(width, height, pixels, pitch);
+}
+
+void CKernel::VideoSetView(int x, int y, int w, int h, double aspect) {
+  mVideo.SetView(x, y, w, h, aspect, mOptions.GetDouble("scale", 1.0));
+}
+
+void CKernel::DisplaySize(int *width, int *height) {
+  mVideo.DisplaySize(width, height);
+}
+
+bool CKernel::DisplayMatchRate(double fps) {
+  Core1Beat("setting the video mode");
+  bool changed = mVideo.MatchRate(fps, Pi4Sound::SAMPLE_RATE);
+  Core1Beat("emulating");
+  return changed;
+}
+
+void CKernel::VideoPresent(int wait_vsync) {
+  // Let Circle's tasks (the network, the web UI) run once per frame.
+  Core1Beat("running Circle tasks");
+  CScheduler::Get()->Yield();
+  Core1Beat("writing the log file");
+  mLog.Drain();
+  Core1Beat("showing a frame (framebuffer)");
+  mVideo.Present(wait_vsync != 0);
+  Core1Beat("emulating");
+}
+
+//
+// Sound
+//
+
+unsigned CKernel::SoundOpen(unsigned freq, int channels,
+                            unsigned latency_frames) {
+  (void)freq; // HDMI runs at Pi4Sound::SAMPLE_RATE.
+  return mPi4Sound.Open(channels, latency_frames);
+}
+
+void CKernel::SoundClose(void) {
+  // HDMI sound keeps running (silent when nothing is written); it can only
+  // be started on core 0.
+}
+
+unsigned CKernel::SoundFreeFrames(void) { return mPi4Sound.FreeFrames(); }
+
+void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
+  Core1Beat("writing sound (HDMI)");
+  mPi4Sound.Write(samples, frames);
+  Core1Beat("emulating");
+}
+
+#else
+
 int CKernel::VideoInit(int width, int height, uint16_t **pixels, int *pitch) {
   if (mOptions.GetBool("crt_shader", false)) {
     mFrameBuffer.SetUsesShader(true);
   }
-  if (mOptions.GetBool("smooth", false)) {
-    FrameBufferLayer::SetInterpolation(1);
-  }
+  // The firmware's own scaling kernel is soft, so sharp pixels need the
+  // nearest neighbour kernel set explicitly (as BMC64 does).
+  FrameBufferLayer::SetInterpolation(mOptions.GetBool("smooth", false) ? 1 : 0);
   int ret = mFrameBuffer.Allocate(1 /* RGB565 */, (uint8_t **)pixels, width,
                                   height, pitch);
   if (ret != 0) {
@@ -632,6 +737,11 @@ void CKernel::DisplaySize(int *width, int *height) {
   int fb_w, fb_h, src_w, src_h, dst_w, dst_h;
   mFrameBuffer.GetDimensions(width, height, &fb_w, &fb_h, &src_w, &src_h,
                              &dst_w, &dst_h);
+}
+
+bool CKernel::DisplayMatchRate(double fps) {
+  (void)fps; // The mode is the firmware's (config.txt).
+  return false;
 }
 
 void CKernel::VideoPresent(int wait_vsync) {
@@ -685,6 +795,8 @@ void CKernel::SoundWrite(const int16_t *samples, unsigned frames) {
   }
 }
 
+#endif
+
 //
 // System
 //
@@ -700,11 +812,37 @@ void CKernel::Reboot(void) {
 }
 
 void CKernel::PowerOff(void) {
+#if RASPPI >= 4
+  mLogger.Write(FromKernel, LogNotice, "Powering off");
+  mLog.Close();
+  mVideo.Blank();
+  CTimer::SimpleMsDelay(100);   // the log out of the UART
+  // First tell the firmware, as Linux does before every reboot, halt or
+  // power off: the mailbox tag RPI_FIRMWARE_NOTIFY_REBOOT, 0x00030048, no
+  // data (drivers/firmware/raspberrypi.c, rpi_firmware_notify_reboot and
+  // rpi_firmware_shutdown; include/soc/bcm2835/raspberrypi-firmware.h).
+  // Circle's GetTag() needs room for at least one value, so the simple tag.
+  {
+    CBcmPropertyTags tags;
+    TPropertyTagSimple tag;
+    tags.GetTag(0x00030048, &tag, sizeof tag, 0);
+  }
+  // Then a restart into "partition 63", which the firmware takes as a halt:
+  // the same as Linux's power off on the Raspberry Pi (bcm2835_wdt.c,
+  // bcm2835_power_off). The Pi 4 B's bootloader then halts, waking on
+  // GPIO3 (WAKE_ON_GPIO=1, its default; with 0 and POWER_OFF_ON_HALT=1 it
+  // switches its outputs off); the Pi 400's switches off, and its power key
+  // turns it back on (rpi-eeprom firmware-2711/release-notes.md). Circle:
+  // CBcmWatchdog.
+  CBcmWatchdog watchdog;
+  watchdog.Restart(CBcmWatchdog::PartitionHalt);
+#else
   mLogger.Write(FromKernel, LogNotice, "Halting; safe to switch off");
   mLog.Close();
   // Blank the picture so it is clear the Pi has stopped.
   mFrameBuffer.Hide();
   halt();
+#endif
 }
 
 bool CKernel::SetLogDestination(int destination) {
@@ -760,6 +898,10 @@ const char *host_model_name(void) {
 
 void host_display_size(int *width, int *height) {
   CKernel::Get()->DisplaySize(width, height);
+}
+
+int host_display_match_rate(double fps) {
+  return CKernel::Get()->DisplayMatchRate(fps) ? 1 : 0;
 }
 
 void host_network_status(char *text, unsigned size) {

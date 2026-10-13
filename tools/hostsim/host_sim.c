@@ -576,6 +576,12 @@ void host_display_size(int *width, int *height)
 	*height = 720;
 }
 
+int host_display_match_rate(double fps)
+{
+	(void) fps;
+	return 0;
+}
+
 void host_log(const char *message)
 {
 	fprintf(stderr, "[log] %s\n", message);

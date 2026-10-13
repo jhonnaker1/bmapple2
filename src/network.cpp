@@ -54,6 +54,8 @@ static bool HasOnboardWLAN(TMachineModel model) {
   case MachineModel3B:
   case MachineModel3APlus:
   case MachineModel3BPlus:
+  case MachineModel4B:
+  case MachineModel400:
     return true;
   default:
     return false;
@@ -65,6 +67,9 @@ static bool HasOnboardEthernet(TMachineModel model) {
   case MachineModel2B:
   case MachineModel3B:
   case MachineModel3BPlus:
+  // The Pi 4's Ethernet is in the SoC (Circle's CBcm54213Device), not on USB.
+  case MachineModel4B:
+  case MachineModel400:
     return true;
   default:
     return false;
@@ -85,6 +90,9 @@ static bool HasWifiFirmware(void) {
       "brcmfmac43436s-sdio.bin", "brcmfmac43436s-sdio.txt",
       "brcmfmac43455-sdio.bin",  "brcmfmac43455-sdio.clm_blob",
       "brcmfmac43455-sdio.txt",
+      // The Pi 400 (Circle's addon/wlan/ether4330.c: chip 0x4345 rev 9).
+      "brcmfmac43456-sdio.bin",  "brcmfmac43456-sdio.txt",
+      "brcmfmac43456-sdio.clm_blob",
   };
   for (unsigned i = 0; i < sizeof files / sizeof files[0]; i++) {
     char path[64];

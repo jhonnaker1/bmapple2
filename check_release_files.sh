@@ -15,6 +15,19 @@ SRC_DIR=$(cd "$(dirname "$0")" && pwd)
 KERNELS=(
     "kernel7.img"       # Pi 2
     "kernel8-32.img"    # Pi 3, Pi Zero 2 W
+    "kernel8-rpi4.img"  # Pi 4 B, Pi 400 (64-bit)
+)
+
+# What the Pi 4 boots with besides its kernel: needed when kernel8-rpi4.img
+# is on the card.
+PI4_FILES=(
+    "start4.elf"
+    "fixup4.dat"
+    "bcm2711-rpi-4-b.dtb"
+    "bcm2711-rpi-400.dtb"
+    "armstub8-rpi4.bin"
+    "COPYING.linux"
+    "LICENCE.broadcom"
 )
 
 # Files that must be there and not empty.
@@ -44,6 +57,9 @@ REQUIRED_FILES=(
     "firmware/brcmfmac43455-sdio.bin"
     "firmware/brcmfmac43455-sdio.clm_blob"
     "firmware/brcmfmac43455-sdio.txt"
+    "firmware/brcmfmac43456-sdio.bin"
+    "firmware/brcmfmac43456-sdio.clm_blob"
+    "firmware/brcmfmac43456-sdio.txt"
     "firmware/LICENCE.broadcom_bcm43xx"
     "firmware/LICENCE.cypress"
     "firmware/LICENCE.synaptics"
@@ -121,6 +137,18 @@ do
         problems=1
     fi
 done
+if [ -s "$RELEASE_DIRECTORY/kernel8-rpi4.img" ]
+then
+    for pi4_file in "${PI4_FILES[@]}"
+    do
+        if [ ! -s "$RELEASE_DIRECTORY/$pi4_file" ]
+        then
+            echo "Missing or empty (needed by the Pi 4): $pi4_file"
+            problems=1
+        fi
+    done
+fi
+
 if [ "$kernels_found" -eq 0 ]
 then
     echo "Missing: a kernel (${KERNELS[*]})"

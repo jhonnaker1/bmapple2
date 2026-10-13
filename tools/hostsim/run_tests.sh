@@ -185,6 +185,13 @@ echo "Gamepad opens the menu"
 run padmenu 60 "$TESTROMS" "" '120 pad 0 0\n130 pad 0 0x0100\n135 pad 0 0\n150 shot menu.ppm\n151 quit\n'
 has_colour padmenu menu 255 129 0 "Home opens the menu"
 
+echo "The power key (Pi 400: Fn+F10) shuts down"
+run powerkey 60 "$TESTROMS" "" '150 key 0x66 1\n152 key 0x66 0\n250 quit\n'
+check_log powerkey "Shutting down" "the power key while playing"
+check_log powerkey "power off requested" "the power key powers off"
+run powerkeymenu 60 "$TESTROMS" "" '150 key 0x45 1\n152 key 0x45 0\n180 key 0x66 1\n182 key 0x66 0\n250 quit\n'
+check_log powerkeymenu "power off requested" "the power key in the menu powers off"
+
 echo "Web UI reboot request"
 run reboot 60 "$TESTROMS" "" '120 webui reboot\n200 quit\n'
 check_log reboot "reboot requested" "reboots"
