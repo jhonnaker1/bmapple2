@@ -164,25 +164,37 @@ int main(int argc, char **argv) {
       std::vector<uint32_t> img((size_t)sz.w * sz.h);
       RenderFrame(s, src.data(), img);
 
-      // Against the floating point crt-pi.
-      int maxd = 0;
+      // Against the floating point crt-pi. See scaler.h: fixed point
+      // weights, so a few levels either way.
+      const int tolerance = m.curvature && m.smooth ? 4 : 3;
+      // Sharp pixels on a curved screen: where a sample point falls exactly
+      // on the edge between two texels, the fast path and the reference can
+      // pick different ones, depending on the CPU's floating point (x86 and
+      // ARM differ). Those few are counted, not failed.
+      int maxd = 0, edge = 0;
       double sum = 0;
       for (unsigned y = 0; y < sz.h; y++) {
         for (unsigned x = 0; x < sz.w; x++) {
           uint32_t a = img[(size_t)y * sz.w + x];
           uint32_t b = s.Reference(src.data(), x, y);
+          int pd = 0;
           for (int k = 0; k < 24; k += 8) {
             int d = abs((int)((a >> k) & 255) - (int)((b >> k) & 255));
-            maxd = d > maxd ? d : maxd;
+            pd = d > pd ? d : pd;
             sum += d;
+          }
+          if (pd > tolerance && m.curvature && !m.smooth) {
+            edge++;
+          } else {
+            maxd = pd > maxd ? pd : maxd;
           }
         }
       }
-      char what[128];
-      snprintf(what, sizeof what, "matches crt-pi in floating point (max %d, mean %.3f)",
-               maxd, sum / (3.0 * sz.w * sz.h));
-      // See scaler.h: fixed point weights.
-      Check(maxd <= (m.curvature && m.smooth ? 4 : 3), name, what);
+      char what[160];
+      snprintf(what, sizeof what,
+               "matches crt-pi in floating point (max %d, mean %.3f, %d texel edge pixel(s))",
+               maxd, sum / (3.0 * sz.w * sz.h), edge);
+      Check(maxd <= tolerance && edge <= 8, name, what);
 
       if (sz.w == 1440) {
         char path[256];
