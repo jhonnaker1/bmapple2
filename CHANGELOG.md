@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0 – 2026-10-13
+## 0.1.0 – 2026-10-15
 
 - First version: BMApple2, based on BMCoco 0.2.0 (itself based on BMA800XL
   1.1.0 and BMC64), with XRoar replaced by KEGS 1.38
