@@ -1,7 +1,7 @@
 # BMApple2
 
 BMApple2 is a bare metal Apple IIgs and Apple IIe emulator for the Raspberry
-Pi 2, 3 and 4. It runs Kent Dickey's [KEGS](https://kegs.sourceforge.net/)
+Pi Zero, 2, 3, 4 and 5. It runs Kent Dickey's [KEGS](https://kegs.sourceforge.net/)
 emulator directly on the hardware, with no Linux underneath, the same way
 [BMC64](https://github.com/randyrossi/bmc64) does for the Commodore 64,
 [BMA800XL](https://github.com/aminch/bma800xl) for the Atari 800XL and
@@ -53,8 +53,18 @@ HDMI; sound can also go to the 3.5mm jack.
 
 The Raspberry Pi 4 Model B and Pi 400 (`kernel8-rpi4.img`, 64-bit) are
 supported too, with the display run at the IIgs's exact refresh rate on either
-HDMI port, and sound over HDMI or the Pi 4 B's 3.5mm jack. See
-[docs/PI4.md](docs/PI4.md).
+HDMI port, the CRT effect and smooth scaling drawn by its 3D GPU, and sound
+over HDMI or the Pi 4 B's 3.5mm jack. See [docs/PI4.md](docs/PI4.md).
+
+The Raspberry Pi 5, Pi 500 and Pi 500+ (`kernel_2712.img`, 64-bit) are
+supported too. See [docs/PI5.md](docs/PI5.md).
+
+The Raspberry Pi Zero and Zero W (`kernel.img`) start too, with everything
+on their one, slower core, but they are likely too slow for the IIgs; an
+Apple IIe at 1 MHz has the best chance.
+
+The Pi 4's 3D GPU, the Pi 5 and the Pi Zero come from BMA800XL 1.2.0 to
+1.4.0.
 
 ## Getting started
 

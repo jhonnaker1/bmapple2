@@ -2,8 +2,10 @@
 
 ## What you need
 
-- A Raspberry Pi 4 Model B or Pi 400, a Raspberry Pi 3 Model B, B+ or A+, a
-  Raspberry Pi Zero 2 W, or a Raspberry Pi 2 Model B
+- A Raspberry Pi 4 Model B or Pi 400, a Raspberry Pi 5, Pi 500 or Pi 500+,
+  a Raspberry Pi 3 Model B, B+ or A+, a Raspberry Pi Zero 2 W, or a
+  Raspberry Pi 2 Model B (a Pi Zero or Zero W starts too, but is likely too slow
+  for the IIgs; see the User Guide)
 - A microSD card (BMApple2 itself needs only a few MB; disk images take
   what they take, a GS/OS hard disk image often 32 MB)
 - An HDMI display, ideally one that accepts 720p at 60 Hz
@@ -72,8 +74,9 @@ changed: `config.txt` and `cmdline.txt` if you edited them. Your settings
 (`bmapple2.cfg`, `config.kegs`, `wpa_supplicant.conf`), ROMs and disk images
 are not in the release zip and stay as they are.
 
-With networking on, a new kernel (`kernel8-rpi4.img` for a Pi 4 or 400,
-`kernel8-32.img` for a Pi 3 or Zero 2 W, `kernel7.img` for a Pi 2) can also
-be uploaded in the web UI's file manager and started with **Reboot**.
-Updates that change other files (the Pi firmware in the root or in
-`firmware/`) need the card in a computer.
+With networking on, a new kernel (`kernel_2712.img` for a Pi 5, 500 or
+500+, `kernel8-rpi4.img` for a Pi 4 or 400, `kernel8-32.img` for a Pi 3 or
+Zero 2 W, `kernel7.img` for a Pi 2, `kernel.img` for a Pi Zero or Zero W)
+can also be uploaded in the web UI's file manager and started with
+**Reboot**. Updates that change other files (the Pi firmware in the root or
+in `firmware/`) need the card in a computer.

@@ -79,18 +79,46 @@ static const char *vsync_mode(void)
 
 static void video_menu(void)
 {
-	enum { V_MONITOR, V_VSYNC, V_SHADER, V_SMOOTH };
+	enum { V_MONITOR, V_VSYNC, V_RESOLUTION, V_SHADER, V_CURVATURE, V_SMOOTH };
+	/* The Pi 5 only: its firmware ignores hdmi_mode (from BMA800XL). */
+	static const char *const resolutions[] = {"auto", "1920x1080", "1280x720", NULL};
+	static const char *const resolution_names[] = {"Auto", "1920x1080", "1280x720", NULL};
 	int sel = 0;
 	for (;;) {
+		const char *res = host_option("resolution", "auto");
+		int res_index = 0, n_items, k;
+		for (k = 0; resolutions[k] != NULL; k++)
+			if (strcmp(res, resolutions[k]) == 0)
+				res_index = k;
 		struct osd_item items[] = {
 			{"Monitor", bmapple2_monitor_name(bmapple2_monitor()), OSD_ITEM_SUBMENU, V_MONITOR},
 			{"Frame Lock", vsync_mode(), OSD_ITEM_SUBMENU, V_VSYNC},
+			{"Resolution", resolution_names[res_index], OSD_ITEM_SUBMENU, V_RESOLUTION},
 			{"CRT Effect (reboot)", NULL, check(setting_on("crt_shader", FALSE)), V_SHADER},
+			{"CRT Curvature (reboot)", NULL, check(setting_on("crt_curvature", FALSE)), V_CURVATURE},
 			{"Smooth Scaling (reboot)", NULL, check(setting_on("smooth", FALSE)), V_SMOOTH},
 		};
-		int chosen = osd_menu("Video", items, sizeof(items) / sizeof(items[0]), &sel);
-		int i;
+		int chosen, i;
+		n_items = sizeof(items) / sizeof(items[0]);
+		if (!host_display_resolution_choice()) {
+			/* Resolution is only for the Pi 5 (with video_driver=kms). */
+			for (k = 2; k < n_items - 1; k++)
+				items[k] = items[k + 1];
+			n_items--;
+		}
+		chosen = osd_menu("Video", items, n_items, &sel);
 		switch (chosen) {
+		case V_RESOLUTION:
+			i = osd_choose("Resolution", resolution_names, res_index);
+			if (i >= 0 && i != res_index) {
+				save_setting("resolution", resolutions[i]);
+				bmapple2_display_mode_changed();
+			}
+			break;
+		case V_CURVATURE:
+			save_setting("crt_curvature", setting_on("crt_curvature", FALSE) ? "0" : "1");
+			reboot_needed = TRUE;
+			break;
 		case V_MONITOR: {
 			const char *names[BMAPPLE2_MONITORS + 1];
 			int m;

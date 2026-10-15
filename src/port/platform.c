@@ -155,6 +155,17 @@ void bmapple2_video_settings_changed(void)
 	apply_view();
 }
 
+/* The display's resolution setting changed (the Pi 5): the mode is set
+   again for the IIgs's rate (from BMA800XL). */
+void bmapple2_display_mode_changed(void)
+{
+	if (host_display_match_rate(VBL_RATE))
+		measure_refresh_rate();
+	update_sync_mode();
+	bmapple2_sound_open();
+	apply_view();
+}
+
 /* ---- Monitors --------------------------------------------------------- */
 
 /* The monitor: a colour one, or a monochrome one in white, green or amber.

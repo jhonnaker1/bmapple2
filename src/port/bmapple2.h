@@ -49,6 +49,8 @@ void bmapple2_idle(void);
 double bmapple2_refresh_rate(void);
 int bmapple2_vsync_locked(void);
 void bmapple2_video_settings_changed(void);
+/* The display's resolution setting changed (the Pi 5). */
+void bmapple2_display_mode_changed(void);
 /* The machines, the one running (-1 if there is no ROM), and choosing
    another (its ROM is loaded and it starts; kept in bmapple2.cfg). */
 enum { BMAPPLE2_IIGS3, BMAPPLE2_IIGS1, BMAPPLE2_IIE, BMAPPLE2_MACHINES };
