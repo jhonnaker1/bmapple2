@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 – 2026-10-15
 
 - Machine choice in the F10 menu (and `machine=`): Apple IIgs ROM 3, ROM
   01, or Apple IIe, of those there are ROMs for
