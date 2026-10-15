@@ -98,7 +98,7 @@
   <button id="sound">Sound: off</button>
 </div>
 <div id="status">Connecting...</div>
-<div id="help">Type straight into the screen once it has focus. Ctrl+F12 is Reset; F1 and F2 are Open Apple and Option. A gamepad works as the joystick (A and B buttons 0 and 1, X Space, Y Return, Home menu). Mount disks with F4, Disk Configuration.</div>
+<div id="help">Type straight into the screen once it has focus. Ctrl+F12 is Reset; F1 and F2 are Open Apple and Option. A gamepad works as the joystick (A and B buttons 0 and 1, X Space, Y Return, Home menu). Click the screen to use the mouse (Esc lets it go). Mount disks with F4, Disk Configuration.</div>
 
 <script>
 "use strict";
@@ -165,6 +165,41 @@ document.querySelectorAll("button[data-key]").forEach((b) => {
     wrap.focus();
   });
 });
+
+// ---- Mouse ----
+// Clicking the screen captures the mouse (Esc lets it go): its movements
+// are the IIgs mouse's, sent at most once a frame.
+let mouseDx = 0, mouseDy = 0, mouseButtons = 0, mouseDirty = false;
+const locked = () => document.pointerLockElement === canvas;
+canvas.addEventListener("click", () => {
+  if (!locked()) canvas.requestPointerLock();
+});
+document.addEventListener("pointerlockchange", () => {
+  if (!locked() && mouseButtons) { mouseButtons = 0; mouseDirty = true; }
+  statusEl.dataset.mouse = locked() ? "1" : "";
+});
+canvas.addEventListener("mousemove", (e) => {
+  if (!locked()) return;
+  mouseDx += e.movementX;
+  mouseDy += e.movementY;
+  mouseDirty = true;
+});
+function mouseButton(e, down) {
+  if (!locked()) return;
+  const bit = e.button === 0 ? 1 : e.button === 2 ? 2 : 4;
+  mouseButtons = down ? mouseButtons | bit : mouseButtons & ~bit;
+  mouseDirty = true;
+}
+canvas.addEventListener("mousedown", (e) => mouseButton(e, true));
+canvas.addEventListener("mouseup", (e) => mouseButton(e, false));
+canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+function sendMouse() {
+  if (!mouseDirty) return;
+  send(`/mouse?x=${Math.round(mouseDx)}&y=${Math.round(mouseDy)}&b=${mouseButtons}`);
+  mouseDx = mouseDy = 0;
+  mouseDirty = false;
+}
+setInterval(sendMouse, 16);
 
 // ---- Sound ----
 let audioCtx = null;

@@ -225,8 +225,24 @@ void host_sound_write(const int16_t *samples, unsigned frames)
 {
 	unsigned i;
 	sound_advance();
-	if (live)
-		live_audio(samples, frames * snd_channels);
+	if (live) {
+		if (snd_channels == 2) {
+			/* The page plays mono: left and right mixed. */
+			int16_t mono[1024];
+			unsigned done = 0;
+			while (done < frames) {
+				unsigned n = frames - done > 1024 ? 1024 : frames - done;
+				unsigned j;
+				for (j = 0; j < n; j++)
+					mono[j] = (int16_t) (((int) samples[(done + j) * 2]
+					                      + samples[(done + j) * 2 + 1]) / 2);
+				live_audio(mono, n);
+				done += n;
+			}
+		} else {
+			live_audio(samples, frames * snd_channels);
+		}
+	}
 	for (i = 0; i < frames * snd_channels; i++)
 		if (samples[i] != samples[0])
 			snd_nonzero++;
