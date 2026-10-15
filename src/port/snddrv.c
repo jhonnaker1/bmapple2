@@ -38,6 +38,49 @@ static int ring_pos;            /* next sample to play in g_sound_shm_addr */
 static unsigned out_rate;       /* 0: no sound */
 static unsigned out_latency;    /* frames */
 static int16_t silence[2048 * 2];
+static int volume = -1;                  /* 0-100, -1 until read */
+static int16_t scaled[1024 * 2];
+
+/* The volume BMApple2 plays at, on top of the IIgs's own (its Control
+   Panel's; a IIe has none). */
+int bmapple2_volume(void)
+{
+	if (volume < 0) {
+		volume = host_option_int("volume", 100);
+		if (volume < 0)
+			volume = 0;
+		if (volume > 100)
+			volume = 100;
+	}
+	return volume;
+}
+
+void bmapple2_set_volume(int v)
+{
+	char text[8];
+	volume = v < 0 ? 0 : v > 100 ? 100 : v;
+	snprintf(text, sizeof text, "%d", volume);
+	if (!host_option_set("volume", text) || !host_options_save())
+		printf("BMApple2: cannot save volume= in bmapple2.cfg\n");
+}
+
+/* N stereo frames to the output, at the volume. */
+static void write_frames(const int16_t *samples, unsigned n)
+{
+	int v = bmapple2_volume();
+	if (v >= 100) {
+		host_sound_write(samples, n);
+		return;
+	}
+	while (n > 0) {
+		unsigned chunk = n > 1024 ? 1024 : n, i;
+		for (i = 0; i < chunk * 2; i++)
+			scaled[i] = (int16_t) (samples[i] * v / 100);
+		host_sound_write(scaled, chunk);
+		samples += chunk * 2;
+		n -= chunk;
+	}
+}
 
 void bmapple2_sound_open(void)
 {
@@ -82,12 +125,12 @@ static void play(const int16_t *samples, unsigned n)
 	if (n > free_frames)
 		n = free_frames;          /* no room at all: drop the rest */
 	if (n > 0)
-		host_sound_write(samples, n);
+		write_frames(samples, n);
 	if (used < out_latency / 4 && n > 0) {
 		/* running dry: the last frame once more */
 		extra[0] = samples[(n - 1) * 2];
 		extra[1] = samples[(n - 1) * 2 + 1];
-		host_sound_write(extra, 1);
+		write_frames(extra, 1);
 	}
 }
 

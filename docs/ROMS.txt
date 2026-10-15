@@ -15,8 +15,7 @@ Apple IIe
                  at $600)
 
 If there are several, BMApple2 starts the first it finds: ROM 3, then
-ROM 01, then the IIe. Choose another with F4 (KEGS's settings), ROM File
-Selection.
+ROM 01, then the IIe. Choose another under Machine in the F10 menu.
 
 From a MAME ROM set (also Ample's on the Mac)
 ---------------------------------------------

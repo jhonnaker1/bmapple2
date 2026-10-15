@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Machine choice in the F10 menu (and `machine=`): Apple IIgs ROM 3, ROM
+  01, or Apple IIe, of those there are ROMs for
+- Monitors (Video, Monitor, and `monitor=`): colour, or black and white,
+  green or amber monochrome, with Hi-Res drawn as sharp dots
+- Volume (Sound, Volume, and `volume=`), for the IIe too
+- The web UI starts 5.25" disks on a IIgs: its startup slot is set to 6 for
+  that start (a IIgs set to Scan never goes on to slot 6)
+- APPLE2E.ROM can also be made from the unenhanced IIe's MAME chips
+- The PC simulator's live mode has the mouse, and plays stereo sound right
+
 ## 0.1.0 – 2026-10-15
 
 - First version: BMApple2, based on BMCoco 0.2.0 (itself based on BMA800XL

@@ -49,7 +49,23 @@ void bmapple2_idle(void);
 double bmapple2_refresh_rate(void);
 int bmapple2_vsync_locked(void);
 void bmapple2_video_settings_changed(void);
-/* The IIgs ROM file found, or NULL. */
+/* The machines, the one running (-1 if there is no ROM), and choosing
+   another (its ROM is loaded and it starts; kept in bmapple2.cfg). */
+enum { BMAPPLE2_IIGS3, BMAPPLE2_IIGS1, BMAPPLE2_IIE, BMAPPLE2_MACHINES };
+int bmapple2_machine(void);
+const char *bmapple2_machine_name(int machine);
+int bmapple2_machine_available(int machine);
+void bmapple2_set_machine(int machine);
+/* The monitor: colour, or black and white, green or amber (kept in
+   bmapple2.cfg). */
+enum { BMAPPLE2_MONITORS = 4 };
+int bmapple2_monitor(void);
+const char *bmapple2_monitor_name(int monitor);
+void bmapple2_set_monitor(int monitor);
+/* The sound volume, 0-100 (kept in bmapple2.cfg). */
+int bmapple2_volume(void);
+void bmapple2_set_volume(int volume);
+/* The running machine's ROM file, or NULL. */
 const char *bmapple2_rom_file(void);
 /* Reboot or power off, closing files first. */
 void bmapple2_request_power(int power_off);

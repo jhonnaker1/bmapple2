@@ -33,8 +33,9 @@ own into `roms` (or the root of the card):
 | Apple IIgs ROM 01  | `ROM.01` (or `APPLE2GS.ROM`, `xgs.rom`, `342-0077-b`), 128K |
 | Apple IIe          | `APPLE2E.ROM`, 32K: the 16K IIe ROM in its last 16K, the Disk II card's PROM at $600 (the form other emulators use) |
 
-BMApple2 starts the first it finds: ROM 3, then ROM 01, then the IIe. Choose
-another with **F4**, *ROM File Selection*.
+BMApple2 starts the first it finds: ROM 3, then ROM 01, then the IIe.
+Choose another under *Machine* in the **F10** menu (or with `machine=` in
+`cmdline.txt`); the choice is kept.
 
 **From a MAME ROM set** (such as Ample's on the Mac, in
 `~/Library/Application Support/Ample/roms`): MAME keeps the ROM chips rather
@@ -88,8 +89,9 @@ or D-pad move, **Return** or **A** chooses.
 | KEGS Settings  | KEGS's settings, as F4 |
 | Reset          | The reset key (Ctrl+F12) |
 | Restart        | Starts the machine again, as switching it off and on does: it boots from its disks |
-| Video          | The frame lock, CRT effect and smooth scaling |
-| Sound          | HDMI or the headphone jack |
+| Machine        | Apple IIgs with ROM 3, IIgs with ROM 01, or Apple IIe: those there are ROMs for (see ROMs). Choosing one starts it |
+| Video          | The monitor (colour, or a black and white, green or amber monochrome one), the frame lock, CRT effect and smooth scaling |
+| Sound          | The volume, and HDMI or the headphone jack |
 | Network        | Ethernet or Wi-Fi, the web UI (see below) |
 | About          | Versions, the ROM, display and network |
 | Reboot, Shut Down | Restart BMApple2, or halt the Pi. Shut Down also from a keyboard's power key: Fn+F10 on a Pi 400, which switches off; Fn+F10 starts it again |
@@ -183,6 +185,12 @@ The picture is KEGS's: the 640x400 Apple area (Super Hi-Res is 640x200 or
 320x200, the other modes 560x192 or 280x192, all doubled up) and its
 border, shown 4:3 as on an Apple monitor.
 
+**Monitor** (in *Video*): a colour monitor, or a monochrome one, in white,
+green or amber. A monochrome monitor shows each colour as its brightness,
+and Hi-Res as sharp dots rather than colours (BMApple2 keeps the Apple's
+monochrome switch on, as a IIgs's Control Panel does when set to a
+monochrome monitor).
+
 ## Networking and the web UI
 
 BMApple2 can join your network over Ethernet or Wi-Fi and serve a web page
@@ -260,7 +268,10 @@ settings (F4) and `config.kegs` instead.
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
 | `vsync`             | `auto`, `on`, `off`          | `auto`   | Lock frames to the display (see Display and timing) |
 | `video_driver`      | `kms`, `hvs`, `firmware`     | `kms`    | Pi 4 only: `kms` runs the display at the IIgs's exact frame rate; `hvs` leaves the mode set in `config.txt`; `firmware` uses the firmware's framebuffer, if the others give trouble (see [PI4.md](PI4.md)) |
+| `machine`           | `iigs3`, `iigs1`, `iie`      | first with a ROM | Machine to emulate (see ROMs) |
+| `monitor`           | `color`, `white`, `green`, `amber` | `color` | The monitor (see Display and timing) |
 | `sound`             | `0`, `1`                     | `1`      | Sound on or off |
+| `volume`            | 0 to 100                     | `100`    | Sound volume (a IIgs's Control Panel has its own too) |
 | `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |
 | `audio_buffer_ms`   | 20 to 500                    | `60`     | Sound buffer; raise it if the sound breaks up |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Joysticks on the GPIO header |
@@ -271,7 +282,8 @@ settings (F4) and `config.kegs` instead.
 | `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
 | `usbpowerdelay`     | milliseconds                 | `1000`   | Circle: wait for USB devices to power up |
 
-The IIgs's volume is set in its own Control Panel.
+A IIgs also has its own volume, in its Control Panel; a IIe has none, so
+use `volume` (or *Sound*, *Volume* in the menu).
 
 ## Logging
 

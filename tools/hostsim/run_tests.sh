@@ -182,8 +182,8 @@ differ joy centre fire
 same joy centre centre2
 
 echo "Menu (F10)"
-# Down three times (past Reset and Restart) to Video, which opens.
-run menu 60 "$TESTROMS" "" "120 shot before.ppm\n130 key $F10 1\n131 key $F10 0\n150 shot menu.ppm\n160 key $DOWN 1\n161 key $DOWN 0\n162 key $DOWN 1\n163 key $DOWN 0\n164 key $DOWN 1\n165 key $DOWN 0\n170 key $ENTER 1\n171 key $ENTER 0\n190 shot video.ppm\n200 key $F10 1\n201 key $F10 0\n230 shot after.ppm\n231 quit\n"
+# Down four times (past Reset, Restart and Machine) to Video, which opens.
+run menu 60 "$TESTROMS" "" "120 shot before.ppm\n130 key $F10 1\n131 key $F10 0\n150 shot menu.ppm\n160 key $DOWN 1\n161 key $DOWN 0\n162 key $DOWN 1\n163 key $DOWN 0\n164 key $DOWN 1\n165 key $DOWN 0\n166 key $DOWN 1\n167 key $DOWN 0\n170 key $ENTER 1\n171 key $ENTER 0\n190 shot video.ppm\n200 key $F10 1\n201 key $F10 0\n230 shot after.ppm\n231 quit\n"
 has_colour menu menu 255 129 0 "the menu shows its selection bar"
 differ menu menu video
 same menu before after
@@ -257,13 +257,71 @@ else
 fi
 
 echo "Settings are saved"
-# Menu, Video, CRT Effect (on), close.
-run settings 60 "$TESTROMS" "" "120 key $F10 1\n121 key $F10 0\n130 key $DOWN 1\n131 key $DOWN 0\n132 key $DOWN 1\n133 key $DOWN 0\n134 key $DOWN 1\n135 key $DOWN 0\n140 key $ENTER 1\n141 key $ENTER 0\n150 key $DOWN 1\n151 key $DOWN 0\n160 key $ENTER 1\n161 key $ENTER 0\n170 key $F10 1\n171 key $F10 0\n200 quit\n"
+# Menu, Video, CRT Effect (on, two down past Monitor and Frame Lock), close.
+run settings 60 "$TESTROMS" "" "120 key $F10 1\n121 key $F10 0\n130 key $DOWN 1\n131 key $DOWN 0\n132 key $DOWN 1\n133 key $DOWN 0\n134 key $DOWN 1\n135 key $DOWN 0\n136 key $DOWN 1\n137 key $DOWN 0\n140 key $ENTER 1\n141 key $ENTER 0\n150 key $DOWN 1\n151 key $DOWN 0\n152 key $DOWN 1\n153 key $DOWN 0\n160 key $ENTER 1\n161 key $ENTER 0\n170 key $F10 1\n171 key $F10 0\n200 quit\n"
 if grep -q "^crt_shader=1" "$OUT/settings/bmapple2.cfg" 2>/dev/null; then
     pass "settings: Video > CRT Effect saved to bmapple2.cfg"
 else
     fail settings "crt_shader=1 not in bmapple2.cfg"
 fi
+
+echo "Monitors"
+# Every lit pixel of a green monitor is green (red and blue the same, and
+# less than green); amber is red, then green, no blue; white is grey.
+run green 60 "$TESTROMS" "monitor=green" '120 shot a.ppm\n121 quit\n'
+run amber 60 "$TESTROMS" "monitor=amber" '120 shot a.ppm\n121 quit\n'
+run white 60 "$TESTROMS" "monitor=white" '120 shot a.ppm\n121 quit\n'
+for m in green amber white; do
+    if python3 - "$OUT/$m/a.ppm" "$m" <<'EOF'
+import sys
+data = open(sys.argv[1], 'rb').read()
+fields, pos = [], 0
+while len(fields) < 4:
+    while data[pos:pos + 1].isspace():
+        pos += 1
+    end = pos
+    while not data[end:end + 1].isspace():
+        end += 1
+    fields.append(data[pos:end])
+    pos = end
+px = data[pos + 1:]
+lit = 0
+for i in range(0, len(px), 3):
+    r, g, b = px[i], px[i + 1], px[i + 2]
+    if r + g + b == 0:
+        continue
+    lit += 1
+    if sys.argv[2] == 'green' and not (abs(r - b) <= 8 and g > r):
+        sys.exit(1)
+    if sys.argv[2] == 'amber' and not (r >= g > b and b <= 8):
+        sys.exit(1)
+    if sys.argv[2] == 'white' and not (abs(r - g) <= 8 and abs(g - b) <= 8):
+        sys.exit(1)
+sys.exit(0 if lit > 100 else 1)
+EOF
+    then
+        pass "$m: the picture is all $m"
+    else
+        fail "$m" "pixels that aren't $m in out/$m/a.ppm"
+    fi
+done
+# The monitor is chosen in the menu (Video, Monitor, Green) and kept.
+run monitormenu 60 "$TESTROMS" "" "120 key $F10 1\n121 key $F10 0\n130 key $DOWN 1\n131 key $DOWN 0\n132 key $DOWN 1\n133 key $DOWN 0\n134 key $DOWN 1\n135 key $DOWN 0\n136 key $DOWN 1\n137 key $DOWN 0\n140 key $ENTER 1\n141 key $ENTER 0\n150 key $ENTER 1\n151 key $ENTER 0\n160 key $DOWN 1\n161 key $DOWN 0\n162 key $DOWN 1\n163 key $DOWN 0\n170 key $ENTER 1\n171 key $ENTER 0\n180 key $F10 1\n181 key $F10 0\n200 quit\n"
+if grep -q "^monitor=green" "$OUT/monitormenu/bmapple2.cfg" 2>/dev/null; then
+    pass "monitormenu: Video > Monitor > Green saved to bmapple2.cfg"
+else
+    fail monitormenu "monitor=green not in bmapple2.cfg"
+fi
+
+echo "Volume"
+run volume0 60 "$TESTROMS" "volume=0" '600 audio\n601 quit\n'
+check_log volume0 "changing samples 0" "volume=0 is silent"
+check_log boot "changing samples [1-9]" "the default volume isn't"
+
+echo "Machine choice"
+# With only the IIe's ROM, machine=iigs3 falls back to the IIe.
+run machine 60 "$TESTROMS" "machine=iigs3" '100 quit\n'
+check_log machine "Apple IIe, ROM .*roms/ROM" "a machine without a ROM falls back to one with"
 
 if [ -n "${BMAPPLE2_ROMS:-}" ]; then
     echo "Apple IIgs (real ROM from $BMAPPLE2_ROMS)"
@@ -272,6 +330,21 @@ if [ -n "${BMAPPLE2_ROMS:-}" ]; then
     check_log iigs "IIgs 59\.9[0-9] Hz, synchronised to the display" "IIgs locked to 60 Hz"
     differ iigs boot hello
     no_underruns iigs
+
+    echo "Apple IIgs: switching machines"
+    # The IIgs's ROM folder with the stand-in IIe ROM added (as APPLE2E.ROM).
+    mkdir -p "$OUT/bothroms"
+    for f in "$BMAPPLE2_ROMS"/*; do ln -s "$f" "$OUT/bothroms/" 2>/dev/null; done
+    cp "$TESTROMS/ROM" "$OUT/bothroms/APPLE2E.ROM"
+    # Menu, Machine (three down), the IIe (last), and its saved choice.
+    run switch 60 "$OUT/bothroms" "" "200 key $F10 1\n201 key $F10 0\n210 key $DOWN 1\n211 key $DOWN 0\n212 key $DOWN 1\n213 key $DOWN 0\n214 key $DOWN 1\n215 key $DOWN 0\n220 key $ENTER 1\n221 key $ENTER 0\n230 key $DOWN 1\n231 key $DOWN 0\n232 key $DOWN 1\n233 key $DOWN 0\n240 key $ENTER 1\n241 key $ENTER 0\n400 shot iie.ppm\n401 quit\n"
+    check_log switch "machine Apple IIe, ROM .*APPLE2E\.ROM" "the menu switches to the IIe"
+    check_log switch "Read: 32768 bytes of ROM" "KEGS loads the IIe's ROM"
+    if grep -q "^machine=iie" "$OUT/switch/bmapple2.cfg" 2>/dev/null; then
+        pass "switch: machine=iie saved to bmapple2.cfg"
+    else
+        fail switch "machine=iie not in bmapple2.cfg"
+    fi
 
     echo "Apple IIgs starts a 5.25\" disk from the web UI"
     # A boot sector that writes BOOTED at the top left of the text screen.

@@ -155,6 +155,102 @@ void bmapple2_video_settings_changed(void)
 	apply_view();
 }
 
+/* ---- Monitors --------------------------------------------------------- */
+
+/* The monitor: a colour one, or a monochrome one in white, green or amber.
+   A monochrome monitor shows each pixel's brightness in its own colour, and
+   the Apple's monochrome switch ($C021, as a IIgs's Control Panel sets for
+   a monochrome monitor) is kept on, so Hi-Res is drawn as sharp dots
+   rather than in colours. */
+static const struct {
+	const char *key;            /* monitor= */
+	const char *name;
+	int r, g, b;                /* the phosphor's colour */
+} monitors[BMAPPLE2_MONITORS] = {
+	{"color", "Colour", 0, 0, 0},
+	{"white", "Black and White", 0xff, 0xff, 0xff},
+	{"green", "Green", 0x33, 0xff, 0x33},
+	{"amber", "Amber", 0xff, 0xb0, 0x00},
+};
+
+static int monitor;
+static int monitor_mono_set;         /* we turned the $C021 switch on */
+static uint8_t luma_r[256], luma_g[256], luma_b[256];
+static uint16_t mono_rgb565[256];
+
+extern int g_cur_a2_stat;
+extern word32 g_c034_val;
+extern dword64 g_cur_dfcyc;
+
+int bmapple2_monitor(void)
+{
+	return monitor;
+}
+
+const char *bmapple2_monitor_name(int m)
+{
+	return m >= 0 && m < BMAPPLE2_MONITORS ? monitors[m].name : "";
+}
+
+static void set_monitor(int m)
+{
+	int i;
+	monitor = m >= 0 && m < BMAPPLE2_MONITORS ? m : 0;
+	/* Brightness, Rec. 601: 77, 150 and 29 out of 256 (at most 255). */
+	for (i = 0; i < 256; i++) {
+		luma_r[i] = (uint8_t) (i * 77 / 256);
+		luma_g[i] = (uint8_t) (i * 150 / 256);
+		luma_b[i] = (uint8_t) (i * 29 / 256);
+	}
+	for (i = 0; i < 256; i++) {
+		int r = monitors[monitor].r * i / 255;
+		int g = monitors[monitor].g * i / 255;
+		int b = monitors[monitor].b * i / 255;
+		mono_rgb565[i] = (uint16_t) (((r & 0xf8) << 8) | ((g & 0xfc) << 3) | (b >> 3));
+	}
+	if (main_kimage != NULL)
+		video_set_x_refresh_needed(main_kimage, 1);
+}
+
+/* Chooses the monitor, now and for the next boot. */
+void bmapple2_set_monitor(int m)
+{
+	if (m < 0 || m >= BMAPPLE2_MONITORS)
+		return;
+	if (!host_option_set("monitor", monitors[m].key) || !host_options_save())
+		printf("BMApple2: cannot save monitor= in bmapple2.cfg\n");
+	set_monitor(m);
+}
+
+static int monitor_from_option(void)
+{
+	const char *want = host_option("monitor", "color");
+	int m;
+	for (m = 0; m < BMAPPLE2_MONITORS; m++)
+		if (strcmp(want, monitors[m].key) == 0)
+			return m;
+	return 0;
+}
+
+/* Each frame: keeps the monochrome switch on with a monochrome monitor
+   (the IIgs's ROM sets it from the Control Panel at every start), and
+   turns it off again once when going back to colour. */
+static void monitor_switch(void)
+{
+	int on = (g_cur_a2_stat & ALL_STAT_COLOR_C021) != 0;
+	if (monitor != 0 && !on) {
+		g_cur_a2_stat |= ALL_STAT_COLOR_C021;
+		change_display_mode(g_cur_dfcyc);
+		monitor_mono_set = TRUE;
+	} else if (monitor == 0 && monitor_mono_set) {
+		if (on) {
+			g_cur_a2_stat &= ~ALL_STAT_COLOR_C021;
+			change_display_mode(g_cur_dfcyc);
+		}
+		monitor_mono_set = FALSE;
+	}
+}
+
 /* The changed parts of KEGS's picture into the frame buffer. */
 static void copy_picture(void)
 {
@@ -169,10 +265,18 @@ static void copy_picture(void)
 		for (y = rect.y; y < rect.y + rect.height && y < FB_H; y++) {
 			const word32 *src = kegs_pixels + (size_t) y * FB_W;
 			uint16_t *dst = fb_pixels + (size_t) y * fb_pitch_px;
-			for (x = rect.x; x < rect.x + rect.width && x < FB_W; x++) {
-				word32 p = src[x];
-				dst[x] = (uint16_t) (((p >> 8) & 0xf800) | ((p >> 5) & 0x07e0)
-				                     | ((p >> 3) & 0x001f));
+			if (monitor == 0) {
+				for (x = rect.x; x < rect.x + rect.width && x < FB_W; x++) {
+					word32 p = src[x];
+					dst[x] = (uint16_t) (((p >> 8) & 0xf800) | ((p >> 5) & 0x07e0)
+					                     | ((p >> 3) & 0x001f));
+				}
+			} else {
+				for (x = rect.x; x < rect.x + rect.width && x < FB_W; x++) {
+					word32 p = src[x];
+					dst[x] = mono_rgb565[luma_r[(p >> 16) & 0xff]
+					                     + luma_g[(p >> 8) & 0xff] + luma_b[p & 0xff]];
+				}
 			}
 		}
 	}
@@ -417,8 +521,6 @@ void bmapple2_idle(void)
 
 /* ---- ROM --------------------------------------------------------------- */
 
-static char rom_path[256];
-
 /* PATH in the card's DIR folder ("" for the root). */
 static void card_path(char *path, size_t size, const char *dir, const char *name)
 {
@@ -509,39 +611,127 @@ static void make_roms(void)
 	}
 }
 
-/* The ROM is looked for in the roms folder, then the card's root, under the
-   names it usually has (KEGS's list, config.c, and the files ROM sets of
-   other emulators use), and passed to KEGS with -rom: KEGS's own search
-   (g_kegs_default_paths) works from the current folder and HOME, which a
-   bare metal kernel doesn't have. ROM 3 is preferred to ROM 01, and both
-   to an Apple IIe ROM (32K), which makes KEGS a IIe. */
-static const char *find_rom(void)
+/* ---- Machines ------------------------------------------------------------ */
+
+/* The machines, in the order BMApple2 prefers them, each with the names its
+   ROM file usually has (KEGS's list, config.c, and those of other
+   emulators' ROM sets) and its size. A file just called ROM is whichever
+   machine its size says. */
+static const struct {
+	const char *key;            /* machine= in cmdline.txt / bmapple2.cfg */
+	const char *name;
+	long size;
+	const char *files[7];
+} machines[BMAPPLE2_MACHINES] = {
+	{"iigs3", "Apple IIgs, ROM 3", 256 * 1024,
+	 {"ROM.03", "ROM03", "APPLE2GS.ROM2", "Rom03gd", NULL}},
+	{"iigs1", "Apple IIgs, ROM 01", 128 * 1024,
+	 {"ROM.01", "ROM01", "APPLE2GS.ROM", "342-0077-b", "xgs.rom", "XGS.ROM", NULL}},
+	{"iie", "Apple IIe", 32 * 1024,
+	 {"APPLE2E.ROM", NULL}},
+};
+
+/* Each machine's ROM file, or "" if there is none. */
+static char machine_rom[BMAPPLE2_MACHINES][256];
+static int current_machine = -1;
+
+static int rom_file_is(const char *path, long size)
 {
-	static const char *const names[] = {
-		"ROM.03", "ROM03", "APPLE2GS.ROM2", "Rom03gd", "ROM.01", "ROM01",
-		"APPLE2GS.ROM", "342-0077-b", "xgs.rom", "XGS.ROM", "ROM",
-		"APPLE2E.ROM", NULL
-	};
+	struct stat st;
+	return stat(path, &st) == 0 && S_ISREG(st.st_mode) && st.st_size == size;
+}
+
+/* Looks for each machine's ROM in the roms folder, then the card's root.
+   KEGS's own search (g_kegs_default_paths) works from the current folder
+   and HOME, which a bare metal kernel doesn't have, so the ROM is passed to
+   KEGS with -rom. */
+static void find_roms(void)
+{
 	static const char *const dirs[] = {"roms", "", NULL};
-	int d, n;
+	int m, d, n;
 	make_roms();
-	for (d = 0; dirs[d] != NULL; d++) {
-		for (n = 0; names[n] != NULL; n++) {
-			struct stat st;
-			card_path(rom_path, sizeof rom_path, dirs[d], names[n]);
-			if (stat(rom_path, &st) == 0 && S_ISREG(st.st_mode)
-			    && (st.st_size == 32 * 1024 || st.st_size == 128 * 1024
-			        || st.st_size == 256 * 1024))
-				return rom_path;
+	for (m = 0; m < BMAPPLE2_MACHINES; m++) {
+		machine_rom[m][0] = '\0';
+		for (d = 0; dirs[d] != NULL && machine_rom[m][0] == '\0'; d++) {
+			for (n = 0; machines[m].files[n] != NULL; n++) {
+				card_path(machine_rom[m], sizeof machine_rom[m], dirs[d],
+				          machines[m].files[n]);
+				if (rom_file_is(machine_rom[m], machines[m].size))
+					break;
+				machine_rom[m][0] = '\0';
+			}
+			if (machine_rom[m][0] == '\0') {
+				card_path(machine_rom[m], sizeof machine_rom[m], dirs[d], "ROM");
+				if (!rom_file_is(machine_rom[m], machines[m].size))
+					machine_rom[m][0] = '\0';
+			}
 		}
 	}
-	rom_path[0] = '\0';
-	return NULL;
+}
+
+/* The machine to start: machine= if its ROM is there, else the first that
+   has one. */
+static int choose_machine(void)
+{
+	const char *want = host_option("machine", "auto");
+	int m;
+	for (m = 0; m < BMAPPLE2_MACHINES; m++)
+		if (strcmp(want, machines[m].key) == 0 && machine_rom[m][0] != '\0')
+			return m;
+	for (m = 0; m < BMAPPLE2_MACHINES; m++)
+		if (machine_rom[m][0] != '\0')
+			return m;
+	return -1;
+}
+
+int bmapple2_machine(void)
+{
+	return current_machine;
+}
+
+const char *bmapple2_machine_name(int machine)
+{
+	return machine >= 0 && machine < BMAPPLE2_MACHINES ? machines[machine].name : "none";
+}
+
+int bmapple2_machine_available(int machine)
+{
+	return machine >= 0 && machine < BMAPPLE2_MACHINES && machine_rom[machine][0] != '\0';
 }
 
 const char *bmapple2_rom_file(void)
 {
-	return rom_path[0] ? rom_path : NULL;
+	return current_machine >= 0 ? machine_rom[current_machine] : NULL;
+}
+
+/* The machine's own speed: 1 MHz for an Apple IIe, the IIgs's 2.8 MHz,
+   rather than KEGS's default of an 8 MHz ZipGS accelerator, which the Pi 2
+   and 3 can't always keep up with, and which runs old games too fast. */
+static void set_machine_speed(int machine)
+{
+	g_limit_speed = machine == BMAPPLE2_IIE ? 1 : 2;
+}
+
+/* Switches to MACHINE (its ROM is loaded, as F4's ROM File does) and
+   starts it, and keeps the choice for the next boot. */
+void bmapple2_set_machine(int machine)
+{
+	if (!bmapple2_machine_available(machine) || machine == current_machine)
+		return;
+	current_machine = machine;
+	if (!host_option_set("machine", machines[machine].key) || !host_options_save())
+		printf("BMApple2: cannot save machine= in bmapple2.cfg\n");
+	printf("BMApple2: machine %s, ROM %s\n", machines[machine].name, machine_rom[machine]);
+	cfg_file_update_rom(machine_rom[machine]);
+	set_machine_speed(machine);
+	bmapple2_restart();
+	/* A IIe has no border colour ($C034): a IIgs's would stay. */
+	if (machine == BMAPPLE2_IIE) {
+		clock_write_c034(g_c034_val & ~0xf);
+		change_border_color(g_cur_dfcyc, 0);
+	}
+	clear_framebuffer();
+	video_set_x_refresh_needed(main_kimage, 1);
 }
 
 void bmapple2_kegs_config(void)
@@ -667,10 +857,13 @@ void bmapple2_main(void)
 		argv[argc++] = "-noignhalt";
 	argv[argc++] = "-cfg";
 	argv[argc++] = cfg_path;
-	if (find_rom() != NULL) {
+	find_roms();
+	current_machine = choose_machine();
+	if (current_machine >= 0) {
 		argv[argc++] = "-rom";
-		argv[argc++] = rom_path;
-		printf("BMApple2: ROM %s\n", rom_path);
+		argv[argc++] = machine_rom[current_machine];
+		printf("BMApple2: %s, ROM %s\n", machines[current_machine].name,
+		       machine_rom[current_machine]);
 	} else {
 		/* KEGS then opens its configuration screen to choose one. */
 		printf("BMApple2: no IIgs ROM in roms/ (see roms/ROMS.txt)\n");
@@ -696,17 +889,9 @@ void bmapple2_main(void)
 	   in KEGS's settings (F4) still sticks. */
 	g_joystick_type = 2;
 
-	/* The speed of the machine the ROM is for: 1 MHz for an Apple IIe
-	   (a 32K ROM), the IIgs's own 2.8 MHz for a IIgs, rather than KEGS's
-	   default of an 8 MHz ZipGS accelerator, which the Pi 2 and 3 can't
-	   always keep up with, and which runs old games too fast. As with the
-	   joystick, a speed chosen with F6 or F4 still sticks. */
-	{
-		struct stat st;
-		int iie = rom_path[0] != '\0' && stat(rom_path, &st) == 0
-		          && st.st_size == 32 * 1024;
-		g_limit_speed = iie ? 1 : 2;
-	}
+	/* The machine's own speed (set_machine_speed()). As with the joystick,
+	   a speed chosen with F6 or F4 still sticks. */
+	set_machine_speed(current_machine);
 
 	if (kegs_init(32, FB_W, FB_H, 1) != 0) {
 		osd_open();
@@ -718,6 +903,7 @@ void bmapple2_main(void)
 	}
 	main_kimage = video_get_kimage(0);
 	video_set_active(main_kimage, 1);
+	set_monitor(monitor_from_option());
 	video_update_scale(main_kimage, FB_W, FB_H, 1);
 	/* The whole picture, status lines included (see FB_H). */
 	/* The status lines come and go (F5), so leave room for many. */
@@ -750,6 +936,7 @@ void bmapple2_main(void)
 			}
 		}
 		startup_slot_continue();
+		monitor_switch();
 		copy_picture();
 		osd_draw_notification(fb_pixels, fb_pitch_px, FB_W, FB_H);
 		host_video_present(vsync_lock);

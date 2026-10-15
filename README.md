@@ -13,7 +13,8 @@ which is based on [BMC64](https://github.com/randyrossi/bmc64) by Randy
 Rossi. The emulator is replaced by KEGS; the kernel, display, sound, network
 and web UI come from those projects.
 
-- Emulates the Apple IIgs (ROM 01 or ROM 3), and the Apple IIe with a IIe ROM
+- Emulates the Apple IIgs (ROM 01 or ROM 3), and the Apple IIe with a IIe ROM,
+  chosen in the menu
 - Boots GS/OS, ProDOS and DOS 3.3 disks: hard disk images in slot 7, 3.5"
   disks in slot 5, 5.25" disks in slot 6 (`.po`, `.2mg`, `.hdv`, `.dsk`,
   `.do`, `.nib`, `.woz`)
@@ -24,8 +25,9 @@ and web UI come from those projects.
   stick gives the full paddle range); real joysticks wired to the GPIO header
 - No shutdown needed: just switch it off (disk images are written as the
   emulated machine writes them, and pushed out to the card every second)
-- KEGS's own settings (F4) for disks, ROM, speed and the rest, and a menu
-  (F10) for the Pi: video, sound, network
+- KEGS's own settings (F4) for disks, speed and the rest, and a menu (F10):
+  the machine, a colour or monochrome monitor (white, green or amber), the
+  volume, video, sound and network
 - Optional Ethernet or Wi-Fi with BMC64's web UI: manage the SD card from a
   browser and start disk images
 

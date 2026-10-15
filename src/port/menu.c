@@ -79,10 +79,11 @@ static const char *vsync_mode(void)
 
 static void video_menu(void)
 {
-	enum { V_VSYNC, V_SHADER, V_SMOOTH };
+	enum { V_MONITOR, V_VSYNC, V_SHADER, V_SMOOTH };
 	int sel = 0;
 	for (;;) {
 		struct osd_item items[] = {
+			{"Monitor", bmapple2_monitor_name(bmapple2_monitor()), OSD_ITEM_SUBMENU, V_MONITOR},
 			{"Frame Lock", vsync_mode(), OSD_ITEM_SUBMENU, V_VSYNC},
 			{"CRT Effect (reboot)", NULL, check(setting_on("crt_shader", FALSE)), V_SHADER},
 			{"Smooth Scaling (reboot)", NULL, check(setting_on("smooth", FALSE)), V_SMOOTH},
@@ -90,6 +91,17 @@ static void video_menu(void)
 		int chosen = osd_menu("Video", items, sizeof(items) / sizeof(items[0]), &sel);
 		int i;
 		switch (chosen) {
+		case V_MONITOR: {
+			const char *names[BMAPPLE2_MONITORS + 1];
+			int m;
+			for (m = 0; m < BMAPPLE2_MONITORS; m++)
+				names[m] = bmapple2_monitor_name(m);
+			names[BMAPPLE2_MONITORS] = NULL;
+			m = osd_choose("Monitor", names, bmapple2_monitor());
+			if (m >= 0)
+				bmapple2_set_monitor(m);
+			break;
+		}
 		case V_VSYNC: {
 			static const char *const choices[] = {
 				"Automatic", "On: follow the display", "Off: keep exact time", NULL
@@ -122,7 +134,10 @@ static void video_menu(void)
 
 static void sound_menu(void)
 {
-	enum { S_OUTPUT };
+	enum { S_VOLUME, S_OUTPUT };
+	static const char *const volumes[] = {
+		"100%", "90%", "80%", "70%", "60%", "50%", "40%", "30%", "20%", "10%", "Off", NULL
+	};
 	static const char *const outputs[] = {"auto", "hdmi", "analog"};
 	static const char *const output_names[] = {"Automatic", "HDMI", "Headphone jack", NULL};
 	int sel = 0;
@@ -130,14 +145,26 @@ static void sound_menu(void)
 		const char *out = host_option("audio_out", "auto");
 		int out_index = strcmp(out, "hdmi") == 0 ? 1
 		                : strcmp(out, "analog") == 0 || strcmp(out, "headphones") == 0 ? 2 : 0;
+		char volume[8];
 		struct osd_item items[] = {
+			{"Volume", volume, OSD_ITEM_SUBMENU, S_VOLUME},
 			{"Output (reboot)", output_names[out_index], OSD_ITEM_SUBMENU, S_OUTPUT},
 			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"The IIgs's volume is set in its", NULL, OSD_ITEM_LABEL, -1},
-			{"Control Panel (Ctrl+Cmd+Esc).", NULL, OSD_ITEM_LABEL, -1},
+			{"On a IIgs, its Control Panel", NULL, OSD_ITEM_LABEL, -1},
+			{"(Ctrl+Cmd+Esc) sets a volume too.", NULL, OSD_ITEM_LABEL, -1},
 		};
-		int chosen = osd_menu("Sound", items, sizeof(items) / sizeof(items[0]), &sel);
-		int i;
+		int chosen, i;
+		if (bmapple2_volume() == 0)
+			snprintf(volume, sizeof volume, "Off");
+		else
+			snprintf(volume, sizeof volume, "%d%%", bmapple2_volume());
+		chosen = osd_menu("Sound", items, sizeof(items) / sizeof(items[0]), &sel);
+		if (chosen == S_VOLUME) {
+			i = osd_choose("Volume", volumes, (100 - bmapple2_volume() + 5) / 10);
+			if (i >= 0)
+				bmapple2_set_volume(100 - i * 10);
+			continue;
+		}
 		if (chosen != S_OUTPUT)
 			return;
 		i = osd_choose("Sound Output", output_names, out_index);
@@ -390,16 +417,19 @@ static void about(void)
 	host_network_status(status, sizeof(status));
 	snprintf(text, sizeof(text),
 	         "BMApple2 " BMAPPLE2_VERSION "\n"
-	         "Bare metal Apple IIgs emulator\n"
+	         "Bare metal Apple IIgs and IIe\n"
+	         "emulator "
 	         "for the Raspberry Pi.\n\n"
 	         "Emulation: KEGS %s\n"
 	         "by Kent Dickey (GPL 3).\n"
 	         "Based on BMCoco, BMA800XL and BMC64.\n\n"
+	         "Machine: %s\n"
 	         "ROM: %s\n"
 	         "Display: %dx%d %.2f Hz\n"
 	         "IIgs: %.2f Hz, %s\n"
 	         "Network: %s",
-	         g_kegs_version_str, rom ? rom : "(none)", w, h, bmapple2_refresh_rate(), VBL_RATE,
+	         g_kegs_version_str, bmapple2_machine_name(bmapple2_machine()),
+	         rom ? rom : "(none)", w, h, bmapple2_refresh_rate(), VBL_RATE,
 	         bmapple2_vsync_locked() ? "locked to display" : "timer paced", status);
 	osd_info("About BMApple2", text);
 }
@@ -410,11 +440,36 @@ static void offer_reboot(void)
 		power(0);
 }
 
+/* ---- Machine ------------------------------------------------------------------ */
+
+/* The machines there are ROMs for; choosing one starts it. */
+static void machine_menu(void)
+{
+	char names[BMAPPLE2_MACHINES][48];
+	const char *choices[BMAPPLE2_MACHINES + 1];
+	int m;
+	for (m = 0; m < BMAPPLE2_MACHINES; m++) {
+		snprintf(names[m], sizeof names[m], "%s%s", bmapple2_machine_name(m),
+		         bmapple2_machine_available(m) ? "" : " (no ROM)");
+		choices[m] = names[m];
+	}
+	choices[BMAPPLE2_MACHINES] = NULL;
+	m = osd_choose("Machine", choices, bmapple2_machine() < 0 ? 0 : bmapple2_machine());
+	if (m < 0 || m == bmapple2_machine())
+		return;
+	if (!bmapple2_machine_available(m)) {
+		osd_message("There is no ROM for that machine in the roms folder (see roms/ROMS.txt).", TRUE);
+		return;
+	}
+	bmapple2_set_machine(m);
+}
+
 /* ---- Main menu ---------------------------------------------------------------- */
 
 void bmapple2_menu(void)
 {
-	enum { M_KEGS, M_RESET, M_RESTART, M_VIDEO, M_SOUND, M_NETWORK, M_ABOUT, M_REBOOT, M_OFF };
+	enum { M_KEGS, M_RESET, M_RESTART, M_MACHINE, M_VIDEO, M_SOUND, M_NETWORK, M_ABOUT,
+	       M_REBOOT, M_OFF };
 	static int sel = 0;
 	char title[48];
 
@@ -427,6 +482,7 @@ void bmapple2_menu(void)
 			{"Reset (Ctrl+F12)", NULL, 0, M_RESET},
 			{"Restart (boot again)", NULL, 0, M_RESTART},
 			{"", NULL, OSD_ITEM_LABEL, -1},
+			{"Machine", bmapple2_machine_name(bmapple2_machine()), OSD_ITEM_SUBMENU, M_MACHINE},
 			{"Video", NULL, OSD_ITEM_SUBMENU, M_VIDEO},
 			{"Sound", NULL, OSD_ITEM_SUBMENU, M_SOUND},
 			{"Network", NULL, OSD_ITEM_SUBMENU, M_NETWORK},
@@ -435,7 +491,7 @@ void bmapple2_menu(void)
 			{"Reboot", NULL, 0, M_REBOOT},
 			{"Shut Down", NULL, 0, M_OFF},
 			{"", NULL, OSD_ITEM_LABEL, -1},
-			{"Disks, ROM, speed: KEGS Settings.", NULL, OSD_ITEM_LABEL, -1},
+			{"Disks, speed: KEGS Settings.", NULL, OSD_ITEM_LABEL, -1},
 		};
 		int chosen = osd_menu(title, items, sizeof(items) / sizeof(items[0]), &sel);
 		int leave = FALSE;
@@ -444,6 +500,10 @@ void bmapple2_menu(void)
 		case M_KEGS: bmapple2_kegs_config(); leave = TRUE; break;
 		case M_RESET: do_reset(); leave = TRUE; break;
 		case M_RESTART: bmapple2_restart(); leave = TRUE; break;
+		case M_MACHINE:
+			machine_menu();
+			leave = osd_closing() || bmapple2_machine() >= 0;
+			break;
 		case M_VIDEO: video_menu(); break;
 		case M_SOUND: sound_menu(); break;
 		case M_NETWORK: network_menu(); break;
