@@ -45,7 +45,7 @@ makes `ROM.03` and `APPLE2E.ROM` from them the first time it starts:
 |--------------------|-------------------------------------------------|
 | Apple IIgs ROM 3   | `341-0728` and `341-0748` from `apple2gs.zip`   |
 | Apple IIgs ROM 01  | `342-0077-b` from `apple2gs.zip` (in `apple2gsr1`), used as it is |
-| Apple IIe          | `342-0304-a.e10` and `342-0303-a.e8` from `apple2e.zip` (in `apple2ee`), and `341-0027-a.p5` from `a2diskiing.zip` |
+| Apple IIe          | `342-0304-a.e10` and `342-0303-a.e8` from `apple2e.zip` (in `apple2ee`), the enhanced IIe, or `342-0135-b.64` and `342-0134-a.64` from the same zip, the original IIe; and `341-0027-a.p5` from `a2diskiing.zip` |
 
 ## Disks
 
@@ -61,13 +61,17 @@ remembered in `config.kegs`. Then restart the machine: *Restart* in the
 **F10** menu.
 
 On a IIgs the startup slot is set in its Control Panel (Ctrl+Open Apple+Esc,
-then *Slots*); the default, *Scan*, starts the highest slot with a disk: 7,
-then 6, then 5.
+then *Slots*). With the default, *Scan*, it starts slot 7, or slot 5 if
+slot 7 has no disk; it doesn't go on to slot 6. To start a 5.25" disk, set
+the startup slot to 6, or type `PR#6` at the `]` prompt. A IIe goes on from
+slot 7 to slot 6 by itself.
 
 From the web UI, clicking a disk image starts it: BMApple2 puts it in drive
 1 of the slot that boots it (5.25" disks in slot 6, 800K disks in slot 5,
 anything bigger in slot 7), empties drive 1 of the slots above it (so it is
-the one that starts), and restarts the machine.
+the one that starts), and restarts the machine. For a 5.25" disk on a IIgs
+it sets the startup slot to 6 for that start, and back to what it was once
+the disk has started.
 
 ## The menus
 

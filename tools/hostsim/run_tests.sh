@@ -272,6 +272,46 @@ if [ -n "${BMAPPLE2_ROMS:-}" ]; then
     check_log iigs "IIgs 59\.9[0-9] Hz, synchronised to the display" "IIgs locked to 60 Hz"
     differ iigs boot hello
     no_underruns iigs
+
+    echo "Apple IIgs starts a 5.25\" disk from the web UI"
+    # A boot sector that writes BOOTED at the top left of the text screen.
+    python3 - "$OUT/disks/boot.dsk" <<'EOF'
+import sys
+prog = []
+for i, c in enumerate("BOOTED"):
+    prog += [0xA9, ord(c) | 0x80, 0x8D, (0x400 + i) & 0xff, (0x400 + i) >> 8]
+loop = 0x801 + len(prog)
+prog += [0x4C, loop & 0xff, loop >> 8]
+img = bytearray(143360)
+img[:1 + len(prog)] = bytes([1] + prog)
+open(sys.argv[1], 'wb').write(img)
+EOF
+    run iigs525 60 "$BMAPPLE2_ROMS" "" "120 run $OUT/disks/boot.dsk\n900 shot booted.ppm\n901 quit\n"
+    check_log iigs525 "startup slot set back to" "the startup slot is put back"
+    # BOOTED is white letters in text row 0; without it the row is blank.
+    if python3 - "$OUT/iigs525/booted.ppm" <<'EOF'
+import sys
+data = open(sys.argv[1], 'rb').read()
+fields, pos = [], 0
+while len(fields) < 4:
+    while data[pos:pos + 1].isspace():
+        pos += 1
+    end = pos
+    while not data[end:end + 1].isspace():
+        end += 1
+    fields.append(data[pos:end])
+    pos = end
+w = int(fields[1])
+px = data[pos + 1:]
+white = sum(1 for y in range(60, 100) for x in range(30, 120)
+            if px[(y * w + x) * 3:(y * w + x) * 3 + 3] == b'\xff\xff\xff')
+sys.exit(0 if white > 50 else 1)
+EOF
+    then
+        pass "iigs525: the disk started (BOOTED on the screen)"
+    else
+        fail iigs525 "the disk didn't start (see out/iigs525/booted.ppm)"
+    fi
 fi
 
 echo

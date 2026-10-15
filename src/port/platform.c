@@ -275,10 +275,53 @@ static int boot_slot(const char *path)
 	return 7;
 }
 
-/* Puts PATH in drive 1 of the slot that boots it and restarts. The IIgs
-   (its Control Panel's startup slot "Scan", the default) and the IIe boot
-   from the highest slot with a disk, so drive 1 of the slots above it is
-   emptied; F4 puts those disks back. */
+/* The IIgs's battery RAM (clock.c): the Control Panel's settings, ending in
+   a checksum the ROM checks at start up (and sets them all back to their
+   defaults if it is wrong). */
+extern byte *g_bram_ptr;
+extern int g_rom_version;
+extern int g_config_kegs_update_needed;
+#define BRAM_STARTUP_SLOT 0x28      /* 0 is "Scan" */
+
+/* Changes one battery RAM setting, checksum and all: going down from $FA,
+   the sum is rotated left and the 16-bit word there added; $FC-$FD hold
+   it and $FE-$FF the same XOR $AAAA (worked out from saved battery RAM,
+   and the same for ROM 01 and ROM 3). */
+static void bram_set(int offset, int value)
+{
+	unsigned sum = 0;
+	int i;
+	g_bram_ptr[offset] = (byte) value;
+	for (i = 0xfa; i >= 0; i--) {
+		sum = ((sum << 1) | (sum >> 15)) & 0xffff;
+		sum = (sum + (g_bram_ptr[i] | (g_bram_ptr[i + 1] << 8))) & 0xffff;
+	}
+	g_bram_ptr[0xfc] = (byte) (sum & 0xff);
+	g_bram_ptr[0xfd] = (byte) (sum >> 8);
+	g_bram_ptr[0xfe] = (byte) ((sum ^ 0xaaaa) & 0xff);
+	g_bram_ptr[0xff] = (byte) ((sum ^ 0xaaaa) >> 8);
+	g_config_kegs_update_needed = 1;     /* KEGS saves it in config.kegs */
+}
+
+/* While a 5.25" disk is being started on a IIgs: frames until the startup
+   slot is set back, and what it was. */
+static int startup_slot_frames;
+static int startup_slot_saved;
+
+static void startup_slot_continue(void)
+{
+	if (startup_slot_frames > 0 && --startup_slot_frames == 0) {
+		bram_set(BRAM_STARTUP_SLOT, startup_slot_saved);
+		printf("BMApple2: startup slot set back to %d\n", startup_slot_saved);
+	}
+}
+
+/* Puts PATH in drive 1 of the slot that boots it and restarts. Drive 1 of
+   the slots above it is emptied (F4 puts those disks back): with slot 7
+   empty KEGS goes on to slot 5, and a IIe on to slot 6. A IIgs doesn't go
+   on from slot 5 to slot 6, so for a 5.25" disk its startup slot (the
+   Control Panel's, "Scan" by default) is set to 6 for this start, then set
+   back once the disk has started. */
 static void autostart(const char *path)
 {
 	int slot = boot_slot(path);
@@ -291,6 +334,12 @@ static void autostart(const char *path)
 	for (s = 7; s > slot; s--)
 		iwm_eject_disk_by_num(s, 0);
 	insert_disk(slot, 0, path, 0, NULL, -1, 0);
+	if (slot == 6 && g_rom_version != 0) {
+		if (startup_slot_frames == 0)
+			startup_slot_saved = g_bram_ptr[BRAM_STARTUP_SLOT];
+		bram_set(BRAM_STARTUP_SLOT, 6);
+		startup_slot_frames = 10 * 60;
+	}
 	bmapple2_restart();
 }
 
@@ -417,7 +466,8 @@ static void write_rom(const char *name, const unsigned char *data, size_t size)
    IIgs ROM 3, apple2gs.zip's 341-0728 and 341-0748, the second with its
    halves the other way round (MAME's apple2gs.cpp); for the enhanced IIe,
    apple2e.zip's apple2ee/342-0304-a.e10 ($C000-$DFFF) and 342-0303-a.e8
-   ($E000-$FFFF), and a2diskiing.zip's 341-0027-a.p5 (the Disk II card's
+   ($E000-$FFFF) (or the unenhanced IIe's 342-0135-b.64 and 342-0134-a.64,
+   from the same zip), and a2diskiing.zip's 341-0027-a.p5 (the Disk II card's
    PROM, at $600 in KEGS's IIe ROM file). Made into ROM.03 and APPLE2E.ROM
    once, when those aren't there yet. */
 static void make_roms(void)
@@ -446,8 +496,11 @@ static void make_roms(void)
 	card_path(path, sizeof path, "roms", "APPLE2E.ROM");
 	if (stat(path, &st) != 0) {
 		buf = calloc(32 * 1024, 1);
-		if (buf != NULL && read_rom_part("342-0304-a.e10", buf + 16 * 1024, 8 * 1024)
-		    && read_rom_part("342-0303-a.e8", buf + 24 * 1024, 8 * 1024)) {
+		if (buf != NULL
+		    && ((read_rom_part("342-0304-a.e10", buf + 16 * 1024, 8 * 1024)
+		         && read_rom_part("342-0303-a.e8", buf + 24 * 1024, 8 * 1024))
+		        || (read_rom_part("342-0135-b.64", buf + 16 * 1024, 8 * 1024)
+		            && read_rom_part("342-0134-a.64", buf + 24 * 1024, 8 * 1024)))) {
 			if (!read_rom_part("341-0027-a.p5", buf + 0x600, 256))
 				printf("BMApple2: no 341-0027-a.p5: the IIe has no Disk II card\n");
 			write_rom("APPLE2E.ROM", buf, 32 * 1024);
@@ -696,6 +749,7 @@ void bmapple2_main(void)
 				host_video_present(TRUE);
 			}
 		}
+		startup_slot_continue();
 		copy_picture();
 		osd_draw_notification(fb_pixels, fb_pitch_px, FB_W, FB_H);
 		host_video_present(vsync_lock);

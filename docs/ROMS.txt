@@ -27,7 +27,8 @@ APPLE2E.ROM from them the first time it starts:
   Apple IIgs ROM 3   apple2gs.zip:    341-0728 and 341-0748
   Apple IIgs ROM 01  apple2gs.zip:    apple2gsr1/342-0077-b (used as it is)
   Apple IIe          apple2e.zip:     apple2ee/342-0304-a.e10 and
-                                      apple2ee/342-0303-a.e8
+                                      apple2ee/342-0303-a.e8 (enhanced),
+                                      or 342-0135-b.64 and 342-0134-a.64
                      a2diskiing.zip:  341-0027-a.p5 (the Disk II card)
 
 Ample keeps its ROM set in ~/Library/Application Support/Ample/roms.
