@@ -454,7 +454,7 @@ static void about(void)
 	         "Machine: %s\n"
 	         "ROM: %s\n"
 	         "Display: %dx%d %.2f Hz\n"
-	         "IIgs: %.2f Hz, %s\n"
+	         "Frames: %.2f Hz, %s\n"
 	         "Network: %s",
 	         g_kegs_version_str, bmapple2_machine_name(bmapple2_machine()),
 	         rom ? rom : "(none)", w, h, bmapple2_refresh_rate(), VBL_RATE,

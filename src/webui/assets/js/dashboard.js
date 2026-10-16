@@ -4,7 +4,7 @@
 
 import { $, fmtUptime, fmtKB } from "./util.js";
 import * as api from "./api.js";
-import { machineDisplayName, setMachine } from "./machine.js";
+import { machineDisplayName, machineShortName, setMachine } from "./machine.js";
 
 // ---- status polling (polite: back off on failure, pause when hidden) ----
 
@@ -102,7 +102,7 @@ async function pollStatus() {
     $("i-ip").textContent = s.ip || "—";
     setMachine(s);
     $("i-machine").textContent = s.machine ? machineDisplayName() : "—";
-    $("qa-reset-sub").textContent = "Start the " + machineDisplayName() + " again";
+    $("qa-reset-sub").textContent = "Start the " + machineShortName() + " again";
     $("i-model").textContent = s.model || "—";
     $("i-net").textContent = s.net_text || ("status " + s.net_status);
     $("i-ver").textContent = s.version

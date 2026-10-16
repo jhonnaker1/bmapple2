@@ -21,6 +21,10 @@
 
 #include <stdio.h>
 
+// The machine running (src/port/platform.c).
+extern "C" int bmapple2_machine(void);
+extern "C" const char *bmapple2_machine_name(int machine);
+
 namespace {
 
 // The disk images KEGS can boot (emu_autostart_interrupt() in
@@ -31,7 +35,7 @@ const char *const kRunTypes[] = {
 };
 
 const WebUiMachine kMachine = {
-    "Apple IIgs", "/config.kegs", kRunTypes, "",
+    "/config.kegs", kRunTypes,
 };
 
 char Lower(char c) {
@@ -42,6 +46,11 @@ char Lower(char c) {
 
 const WebUiMachine *WebUiMachineGet(void) {
   return &kMachine;
+}
+
+const char *WebUiMachineName(void) {
+  int machine = bmapple2_machine();
+  return machine >= 0 ? bmapple2_machine_name(machine) : "";
 }
 
 boolean WebUiMachineCanRun(const char *ext) {
@@ -69,8 +78,8 @@ int WebUiMachineCapsJson(char *out, unsigned size) {
   run[used] = '\0';
 
   int length = snprintf(out, size,
-                        "{\"settings\":\"%s\",\"run\":[%s],\"basic\":\"%s\"}",
-                        kMachine.settings, run, kMachine.basic);
+                        "{\"settings\":\"%s\",\"run\":[%s]}",
+                        kMachine.settings, run);
   if (length < 0 || (unsigned) length >= size) return -1;
   return length;
 }

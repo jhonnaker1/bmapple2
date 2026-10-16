@@ -117,16 +117,18 @@ static void TestChooseMode(void) {
   Check(ok && chosen.vic == 19, "mode 720p", "720p60 -> 720p50 for PAL");
 
   // The IIgs (59.92 Hz) is within CTA-861's 0.5 %; 59.70 Hz and 50.32 Hz
-  // are just outside, so the display would keep its mode and lock to that
-  // (as on a Pi 3).
+  // are just outside, so they get the standard 60 or 50 Hz mode, locked to
+  // as on a Pi 3, even from the other rate.
   ok = ChooseMode(*CtaMode(4), IigsFps, edid, &chosen);
   snprintf(what, sizeof what, "720p60 -> VIC %u, %.5f Hz", chosen.vic, chosen.Refresh());
   Check(ok && chosen.vic == 4 && fabs(chosen.Refresh() / IigsFps - 1.0) < 1e-6,
         "mode IIgs", what);
-  Check(!ChooseMode(*CtaMode(4), Near60Fps, edid, &chosen), "mode 59.70 Hz",
-        "59.70 Hz refused: 720p60 kept");
-  Check(!ChooseMode(*CtaMode(19), Near50Fps, edid, &chosen), "mode 50.32 Hz",
-        "50.32 Hz refused: 720p50 kept");
+  ok = ChooseMode(*CtaMode(4), Near60Fps, edid, &chosen);
+  Check(ok && chosen.vic == 4 && chosen.pixel_hz == CtaMode(4)->pixel_hz, "mode 59.70 Hz",
+        "720p60 at its own clock");
+  ok = ChooseMode(*CtaMode(4), Near50Fps, edid, &chosen);
+  Check(ok && chosen.vic == 19 && chosen.pixel_hz == CtaMode(19)->pixel_hz, "mode 50.32 Hz",
+        "from 720p60: 720p50 at its own clock");
 
   const uint8_t only60[] = {16, 4};
   MakeEdid(data, only60, 2, true);

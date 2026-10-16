@@ -25,8 +25,11 @@ export async function loadMachine() {
   }
 }
 
-// Machine name, e.g. "Apple IIgs".
+// Machine name, e.g. "Apple IIgs, ROM 3" or "Apple IIe".
 export const machineName = () => current.name;
+
+// Without the ROM: "Apple IIgs".
+export const machineShortName = () => current.name.split(",")[0] || "machine";
 
 // Name for display.
 export const machineDisplayName = () => current.name || "machine";

@@ -2,8 +2,9 @@ BMApple2 - bare metal Apple IIgs and Apple IIe emulator for the Raspberry Pi
 ============================================================================
 
 Copy everything here to the root of a FAT32 SD card and boot a Raspberry
-Pi 4, 400, 3, Zero 2 W or 2 from it, with a USB keyboard (and a mouse for
-the IIgs desktop, and a gamepad if you like) connected.
+Pi 5, 500, 4, 400, 3, Zero 2 W or 2 from it (a Pi Zero or Zero W starts
+too, but is likely too slow for the IIgs), with a USB keyboard (and a mouse
+for the IIgs desktop, and a gamepad if you like) connected.
 
 First copy an Apple IIgs ROM (ROM.03 or ROM.01) or an Apple IIe ROM into
 the roms folder (see roms/ROMS.txt). They are copyrighted, so they are not

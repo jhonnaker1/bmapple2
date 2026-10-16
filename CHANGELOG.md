@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- The web UI shows the machine running ("Apple IIgs, ROM 3", "Apple IIe"),
+  not always "Apple IIgs"
+- About shows the machine's frame rate as "Frames", not "IIgs", and the
+  SD card's README lists the Pi 5 and Pi Zero
+- Pi 4 and 5: a rate just outside what HDMI allows gets the standard 50 or
+  60 Hz mode (as in BMCoco), instead of keeping whatever mode the display had
+- The web UI no longer carries BMC64's BASIC listing editor, which BMApple2
+  never used
+
 ## 0.3.1 – 2026-10-16
 
 - The web UI's welcome line and footer name both machines: "Bare metal

@@ -145,7 +145,7 @@ F10=0x43 DOWN=0x51 ENTER=0x28 POWER=0x66
 
 echo "Boot, locked to a 60 Hz display"
 run boot 60 "$TESTROMS" "" '120 shot a.ppm\n121 shot b.ppm\n600 audio\n601 quit\n'
-check_log boot "IIgs 59\.9[0-9] Hz, synchronised to the display" "locked to 60 Hz"
+check_log boot "machine 59\.9[0-9] Hz, synchronised to the display" "locked to 60 Hz"
 check_log boot "created .*config\.kegs" "a new card gets a config.kegs"
 check_log boot "Read: 32768 bytes of ROM" "the stand-in IIe ROM was loaded"
 check_audio boot
@@ -327,7 +327,7 @@ if [ -n "${BMAPPLE2_ROMS:-}" ]; then
     echo "Apple IIgs (real ROM from $BMAPPLE2_ROMS)"
     run iigs 60 "$BMAPPLE2_ROMS" "" '300 shot boot.ppm\n310 type PRINT "HELLO"\\n\n500 shot hello.ppm\n600 audio\n601 quit\n'
     check_log iigs "Read: (131072|262144) bytes of ROM" "IIgs ROM found"
-    check_log iigs "IIgs 59\.9[0-9] Hz, synchronised to the display" "IIgs locked to 60 Hz"
+    check_log iigs "machine 59\.9[0-9] Hz, synchronised to the display" "IIgs locked to 60 Hz"
     differ iigs boot hello
     no_underruns iigs
 

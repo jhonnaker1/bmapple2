@@ -131,11 +131,11 @@ static void update_sync_mode(void)
 	else if (strcmp(mode, "on") == 0 || strcmp(mode, "1") == 0)
 		vsync_lock = TRUE;
 	else {
-		/* The IIgs runs at 59.92 Hz: a 60 Hz display is right for it. */
+		/* The IIgs and IIe run at 59.92 Hz: a 60 Hz display is right. */
 		double ratio = refresh_rate / VBL_RATE;
 		vsync_lock = ratio > 0.98 && ratio < 1.02;
 	}
-	printf("BMApple2: display %.2f Hz, IIgs %.2f Hz, %s\n", refresh_rate, VBL_RATE,
+	printf("BMApple2: display %.2f Hz, machine %.2f Hz, %s\n", refresh_rate, VBL_RATE,
 	       vsync_lock ? "synchronised to the display" : "timer paced");
 }
 
@@ -877,7 +877,7 @@ void bmapple2_main(void)
 		       machine_rom[current_machine]);
 	} else {
 		/* KEGS then opens its configuration screen to choose one. */
-		printf("BMApple2: no IIgs ROM in roms/ (see roms/ROMS.txt)\n");
+		printf("BMApple2: no Apple IIgs or IIe ROM in roms/ (see roms/ROMS.txt)\n");
 	}
 	argv[argc] = NULL;
 	if (parse_argv(argc, argv, 1) != 0)

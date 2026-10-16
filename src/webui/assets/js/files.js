@@ -1,5 +1,5 @@
 // Files view: browse the SD card, upload, download, rename, delete, create
-// folders, autostart, and open the config-file and BASIC editors. Each row has one
+// folders, autostart, and open the config-file editor. Each row has one
 // "Actions" button that opens a menu of what applies to that entry;
 // clicking the name does the most common one (open a folder, run, edit).
 
