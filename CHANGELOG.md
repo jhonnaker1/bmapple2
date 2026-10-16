@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.1 – 2026-10-16
+
+- The web UI's welcome line and footer name both machines: "Bare metal
+  Apple IIgs and IIe"
+
 ## 0.3.0 – 2026-10-15
 
 - From BMA800XL 1.2.0 to 1.4.0 (as in BMCoco 0.4.0):
