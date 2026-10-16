@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.2 – 2026-10-16
 
 - The web UI shows the machine running ("Apple IIgs, ROM 3", "Apple IIe"),
   not always "Apple IIgs"
