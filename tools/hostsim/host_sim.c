@@ -21,6 +21,9 @@
  *   <frame> run <path>             the web UI starts a file
  *   <frame> quit                   end the test
  *
+ * BMAPPLE2_SIM_RATE=48000 plays the sound at the Pi 4 and 5's HDMI rate
+ * (the latency asked for is taken at 44.1 kHz, as there).
+ *
  * With BMAPPLE2_LIVE=PORT it runs in real time instead, with no script: the
  * screen, keyboard, gamepads and sound are in a web page at
  * http://127.0.0.1:PORT/ (live.c, live.html). tools/hostsim/live.sh starts it.

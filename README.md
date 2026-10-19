@@ -117,6 +117,9 @@ builds everything (the kernels for all three boards; `./build_sdcard.sh pi3`,
 `pi2` or `pi4` builds one) and stages the SD card files in `build/sdcard/`.
 It works on Linux and macOS. See [docs/BUILDING.md](docs/BUILDING.md).
 
+BMApple2 can also run on a PC, in a simulator, for testing and debugging
+(with gdb, lldb or strace): see [docs/SIMULATOR.md](docs/SIMULATOR.md).
+
 ## How it fits together
 
 ```
