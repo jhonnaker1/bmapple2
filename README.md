@@ -13,6 +13,10 @@ which is based on [BMC64](https://github.com/randyrossi/bmc64) by Randy
 Rossi. The emulator is replaced by KEGS; the kernel, display, sound, network
 and web UI come from those projects.
 
+BMApple2 wouldn't be possible without the work behind the open source
+projects it builds on. Thanks to their authors and contributors for making
+it available; see the [third-party](docs/THIRD_PARTY.md) acknowledgements.
+
 - Emulates the Apple IIgs (ROM 01 or ROM 3), and the Apple IIe with a IIe ROM,
   chosen in the menu
 - Boots GS/OS, ProDOS and DOS 3.3 disks: hard disk images in slot 7, 3.5"
@@ -100,7 +104,8 @@ buttons 0 and 1, **X** types Space and **Y** Return. **Home**, or
 chooses and **B** goes back.
 
 See the [User Guide](docs/USER_GUIDE.md) for all the details, including the
-options in `cmdline.txt` and the GPIO joystick wiring.
+options in `cmdline.txt` and the GPIO joystick wiring. All the documents are
+listed in [docs/README.md](docs/README.md).
 
 ## Building
 
@@ -128,11 +133,14 @@ src/port/menu.c, osd.c     The menu, drawn in the Apple II's font
 src/port/kegs.mk           KEGS's source list
 third_party/kegs           KEGS (submodule)
 third_party/circle-stdlib  Circle and newlib (submodule)
-src/pi4/                   Pi 4 display, smooth scaling / CRT shader, HDMI sound
-src/pi4kms/                Pi 4 direct display driver (docs/PI4.md)
+src/av/                    Shared Pi 4/5 video, ARM scaling / CRT shader and sound
+src/v3d/                   Shared Pi 4/5 GPU driver and CRT rendering
+src/kms/common/            Shared Pi 4/5 filter kernels and mode calculations
+src/kms/pi4/               Pi 4 direct display driver (docs/PI4.md)
+src/kms/pi5/               Pi 5 direct display driver (docs/PI5.md)
 tools/hostsim              Runs the emulator port on a PC for testing
-tools/pi4scaler            Tests the Pi 4's smooth scaling and CRT shader on a PC
-tools/pi4kms               Tests the Pi 4 display driver's calculations on a PC
+tools/pi4scaler            Tests shared Pi 4/5 ARM scaling and CRT rendering on a PC
+tools/pi4kms               Tests Pi 4/5 display driver calculations on a PC
 ```
 
 KEGS is used unmodified: everything specific to BMApple2 is in `src/`.

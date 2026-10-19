@@ -165,6 +165,9 @@ pull-ups:
 | Right  | 22                | 13                |
 | Fire   | 23                | 19                |
 
+In the menus either GPIO joystick moves the cursor and fire chooses, as a
+gamepad's D-pad and A do.
+
 Ground is on pins 6, 9, 14, 20, 25, 30, 34 or 39 of the header. These are
 digital (switch) joysticks, like an Atari-style stick with an adapter; an
 Apple II's own analog joystick needs an analog to digital converter, which
@@ -282,7 +285,7 @@ settings (F4) and `config.kegs` instead.
 | `webui`             | `0`, `1`                     | `1`      | Web UI when networking is on |
 | `webui_pin`         | digits                       | none     | PIN for the web UI |
 | `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
-| `usbpowerdelay`     | milliseconds                 | `1000`   | Circle: wait for USB devices to power up |
+| `usbpowerdelay`     | milliseconds                 | Circle's | Circle: wait for USB devices to power up (by default 300 ms, 510 ms behind a hub) |
 
 A IIgs also has its own volume, in its Control Panel; a IIe has none, so
 use `volume` (or *Sound*, *Volume* in the menu).
@@ -331,7 +334,12 @@ Panel.
 
 **Keyboard, mouse or gamepad not working**: unplug it and plug it in again;
 devices can come and go while the emulator runs. Some keyboards need a
-longer `usbpowerdelay`.
+longer `usbpowerdelay` (add `usbpowerdelay=1000` to `cmdline.txt`).
+
+**8BitDo M30 2.4G buttons are wrong**: its receiver can be left in Switch
+mode, where it acts as a Switch Pro controller. With the pad connected,
+hold Home (the heart) and D-pad Down for 5 seconds until the LEDs flash; it
+goes back to its own mode and keeps it.
 
 **The joystick doesn't move**: KEGS's *Joystick* setting (F4) should be
 *Native Joystick 1*.

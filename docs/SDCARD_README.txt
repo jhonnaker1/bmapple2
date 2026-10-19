@@ -29,5 +29,9 @@ network=ethernet or network=wifi to cmdline.txt), then open the address
 shown on screen in a browser to manage the files on this card and start
 disk images.
 
+Licences: BMApple2 is under the GPL version 3 (LICENSE.txt); the licenses
+folder has the notices for other projects' code it includes, and the
+firmware folder the Raspberry Pi and Wi-Fi firmware's licences.
+
 Options are in cmdline.txt; see docs/USER_GUIDE.md in BMApple2's source for
 all of them.
