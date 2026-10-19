@@ -1,5 +1,43 @@
 # Changelog
 
+## Unreleased
+
+- Pi Zero, 2, 3 and 4: run the ARM at its full clock (from BMCoco 0.5.3).
+  Without an operating system asking for more the firmware left it at its
+  lowest (600 MHz on a Pi 3 B+, not 1.4 GHz). The log shows the clock
+- Fix the sound being cut off now and then (from BMCoco 0.5.2): a IIgs or
+  IIe (59.92 Hz) locked to a 60 Hz display runs 0.13% fast, more than
+  dropping one sample now and then made up for, so the sound buffer filled
+  and what didn't fit was cut off. The sound is now squeezed or stretched
+  smoothly, by up to 2%. On the Pi Zero to 3 the buffer was also measured
+  in 48 kHz samples although they play at 44.1 kHz
+- Disk activity (from BMCoco 0.5.3): while a 5.25" or 3.5" drive turns, a
+  red light (lit while the disk is read) and its slot, drive and track
+  (`S6 D1 T17`) at the bottom left of the picture, and "no disk" in red
+  when the drive is empty. Video, Show Disk Activity (`disk_activity=0`)
+  turns it off
+- Fix a notification (Reset, Restart...) staying on the picture after its
+  3 seconds when that part of the screen didn't change
+- Video, Screen Size (100% down to 80%), for a TV that cuts off the edges
+  (from BMCoco 0.5.3)
+- The menus can be used with GPIO joysticks: either one moves, fire chooses
+- From BMA800XL 1.4.1 and 1.4.2:
+  - The SD card's `licenses` folder: the notices and licences of the code
+    from other projects in the kernels (KEGS, Circle and newlib, BMC64's
+    Apache 2.0 code, crt-pi, Mesa and Linux's V3D code, the GCC runtime);
+    docs/THIRD_PARTY.md says where each is used
+  - `./build_sdcard.sh pi4 pi5` builds several boards at once, and runs the
+    PC tests first (`--skip-tests` leaves them out)
+  - `cmdline.txt` leaves `usbpowerdelay` to Circle (300 ms, 510 ms behind a
+    hub) rather than 1000 ms, for a quicker start
+  - The Pi 4 and 5's display and GPU code is in `src/av/`, `src/v3d/` and
+    `src/kms/`, with the scaled picture centred exactly
+  - Troubleshooting: an 8BitDo M30 2.4G whose receiver is in Switch mode
+- docs/SIMULATOR.md: testing and debugging BMApple2 on a PC (with gdb, lldb
+  or strace), and getting a log from the Pi
+- Tests: the machine-switching test no longer overwrites APPLE2E.ROM in
+  BMAPPLE2_ROMS; sound tests at 44.1 and 48 kHz
+
 ## 0.3.2 – 2026-10-16
 
 - The web UI shows the machine running ("Apple IIgs, ROM 3", "Apple IIe"),
