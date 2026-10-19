@@ -263,34 +263,111 @@ static void monitor_switch(void)
 }
 
 /* The changed parts of KEGS's picture into the frame buffer. */
+/* Line Y, from X0 to X1, from KEGS's picture into the framebuffer. */
+static void copy_line(int y, int x0, int x1)
+{
+	const word32 *src = kegs_pixels + (size_t) y * FB_W;
+	uint16_t *dst = fb_pixels + (size_t) y * fb_pitch_px;
+	int x;
+	if (monitor == 0) {
+		for (x = x0; x < x1; x++) {
+			word32 p = src[x];
+			dst[x] = (uint16_t) (((p >> 8) & 0xf800) | ((p >> 5) & 0x07e0)
+			                     | ((p >> 3) & 0x001f));
+		}
+	} else {
+		for (x = x0; x < x1; x++) {
+			word32 p = src[x];
+			dst[x] = mono_rgb565[luma_r[(p >> 16) & 0xff]
+			                     + luma_g[(p >> 8) & 0xff] + luma_b[p & 0xff]];
+		}
+	}
+}
+
 static void copy_picture(void)
 {
 	Change_rect rect;
-	int i;
+	int i, y;
 	for (i = 0; i < MAX_CHANGE_RECTS; i++) {
-		int x, y;
 		if (!video_out_data(kegs_pixels, main_kimage, FB_W, &rect, i))
 			break;
 		if (rect.y + rect.height > kegs_height || rect.x + rect.width > FB_W)
 			continue;  /* never written: video_out_data() checks the same */
-		for (y = rect.y; y < rect.y + rect.height && y < FB_H; y++) {
-			const word32 *src = kegs_pixels + (size_t) y * FB_W;
-			uint16_t *dst = fb_pixels + (size_t) y * fb_pitch_px;
-			if (monitor == 0) {
-				for (x = rect.x; x < rect.x + rect.width && x < FB_W; x++) {
-					word32 p = src[x];
-					dst[x] = (uint16_t) (((p >> 8) & 0xf800) | ((p >> 5) & 0x07e0)
-					                     | ((p >> 3) & 0x001f));
-				}
-			} else {
-				for (x = rect.x; x < rect.x + rect.width && x < FB_W; x++) {
-					word32 p = src[x];
-					dst[x] = mono_rgb565[luma_r[(p >> 16) & 0xff]
-					                     + luma_g[(p >> 8) & 0xff] + luma_b[p & 0xff]];
-				}
-			}
-		}
+		for (y = rect.y; y < rect.y + rect.height && y < FB_H; y++)
+			copy_line(y, rect.x, rect.x + rect.width < FB_W ? rect.x + rect.width : FB_W);
 	}
+	/* The bottom lines, where the notification and the disk activity are
+	   drawn, every frame: KEGS only sends what changed, so they would stay
+	   on the picture after they've gone. */
+	for (y = FB_H - OSD_OVERLAY_LINES; y < FB_H; y++) {
+		if (y < 0)
+			continue;
+		if (y < kegs_height)
+			copy_line(y, 0, FB_W);
+		else
+			memset(fb_pixels + (size_t) y * fb_pitch_px, 0, FB_W * sizeof(uint16_t));
+	}
+}
+
+/* ---- Disk activity -------------------------------------------------------- */
+
+/* While a 5.25" or 3.5" drive turns: its slot and drive, track and (3.5")
+   side at the bottom left of the picture, by a red light like a real
+   drive's, lit while the disk is read; "no disk" in red if the drive is
+   empty, so that a program stuck loading can be seen to be (from BMCoco).
+   Read from KEGS's IWM once a frame. Hard disks (SmartPort) aren't shown.
+   The disk_activity option (Video, Show Disk Activity) turns it off. */
+
+extern Iwm g_iwm;
+
+static int da_enabled = -1;
+static dword64 da_last_read;
+static double da_lit_until, da_shown_until;
+static char da_text[32];
+static int da_error;
+
+int bmapple2_disk_activity(void)
+{
+	if (da_enabled < 0)
+		da_enabled = host_option_int("disk_activity", 1) != 0;
+	return da_enabled;
+}
+
+void bmapple2_set_disk_activity(int on)
+{
+	da_enabled = on != 0;
+}
+
+static void draw_disk_activity(void)
+{
+	word32 state = g_iwm.state;
+	int is35 = (state & IWM_STATE_C031_APPLE35SEL) != 0;
+	int drive = (state & IWM_STATE_DRIVE_SEL) ? 1 : 0;
+	int turning = (state & (is35 ? IWM_STATE_MOTOR_ON35 : IWM_STATE_MOTOR_ON)) != 0;
+	Disk *dsk = is35 ? &g_iwm.drive35[drive] : &g_iwm.drive525[drive];
+	double now;
+	if (!bmapple2_disk_activity())
+		return;
+	now = host_time();
+	if (turning) {
+		int empty = dsk->name_ptr == 0 || dsk->name_ptr[0] == '\0';
+		if (dsk->dfcyc_last_read != da_last_read)
+			da_lit_until = now + 0.25;
+		da_last_read = dsk->dfcyc_last_read;
+		if (is35)
+			snprintf(da_text, sizeof da_text, "S5 D%d T%02u H%u%s", drive + 1,
+			         (unsigned) (dsk->cur_frac_track >> 17),
+			         (unsigned) ((dsk->cur_frac_track >> 16) & 1), empty ? " no disk" : "");
+		else
+			snprintf(da_text, sizeof da_text, "S6 D%d T%02u%s", drive + 1,
+			         (unsigned) (dsk->cur_frac_track >> 18), empty ? " no disk" : "");
+		da_error = empty;
+		da_shown_until = now + 2.0;
+	}
+	if (now > da_shown_until)
+		return;
+	osd_draw_disk_status(fb_pixels, fb_pitch_px, FB_W, FB_H, da_text,
+	                     now <= da_lit_until, da_error);
 }
 
 /* ---- Timing (clock.c's, renamed when it is compiled: see kegs.mk) -------- */
@@ -949,6 +1026,7 @@ void bmapple2_main(void)
 		startup_slot_continue();
 		monitor_switch();
 		copy_picture();
+		draw_disk_activity();
 		osd_draw_notification(fb_pixels, fb_pitch_px, FB_W, FB_H);
 		host_video_present(vsync_lock);
 

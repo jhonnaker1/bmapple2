@@ -369,10 +369,60 @@ if [ -n "${BMAPPLE2_ROMS:-}" ]; then
     differ iigs boot hello
     no_underruns iigs
 
+    echo "Disk activity (a IIe, its ROM made from MAME's)"
+    # Booting a blank 5.25" disk: the light and S6 D1 T00 at the bottom
+    # left. With the drive empty the IIe's boot ROM spins it for ever: "no
+    # disk", in red. The ROMs are linked one by one, so that the IIe ROM
+    # BMApple2 makes goes in the test's folder, not the ROM folder.
+    for name in disk_iie disk_empty; do
+        mkdir -p "$OUT/$name/roms"
+        for f in "$BMAPPLE2_ROMS"/*; do ln -s "$f" "$OUT/$name/roms/" 2>/dev/null; done
+    done
+    python3 -c "open('$OUT/disk_iie/blank.dsk','wb').truncate(143360)"
+    (cd "$OUT/disk_iie" && printf "120 run $OUT/disk_iie/blank.dsk\n140 shot disk.ppm\n141 quit\n" | \
+        BMAPPLE2_REFRESH=60 BMAPPLE2_CMDLINE="root=. machine=iie" "$SIM" > log.txt 2>&1)
+    (cd "$OUT/disk_empty" && printf '100 shot disk.ppm\n101 quit\n' | \
+        BMAPPLE2_REFRESH=60 BMAPPLE2_CMDLINE="root=. machine=iie" "$SIM" > log.txt 2>&1)
+    if grep -q "Apple IIe, ROM" "$OUT/disk_iie/log.txt"; then
+        disk_colours() {
+            python3 - "$1" <<'PYEOF'
+import sys
+data = open(sys.argv[1], 'rb').read()
+parts = data.split(b'\n', 3)
+w, h = map(int, parts[1].split())
+px = parts[3]
+red = green = 0
+for y in range(h - 40, h):
+    for x in range(0, 420):
+        r, g, b = px[(y * w + x) * 3:(y * w + x) * 3 + 3]
+        if r > 200 and g < 60 and b < 60: red += 1
+        if g > 200 and r < 60 and b < 60: green += 1
+print(red, green)
+PYEOF
+        }
+        read red green <<< "$(disk_colours "$OUT/disk_iie/disk.ppm")"
+        if [ "$red" -gt 0 ] && [ "$red" -lt 600 ] && [ "$green" -gt 200 ]; then
+            pass "disk_iie: the light and S6 D1 T00 while booting a disk"
+        else
+            fail disk_iie "no disk activity shown (red $red, green $green)"
+        fi
+        read red green <<< "$(disk_colours "$OUT/disk_empty/disk.ppm")"
+        if [ "$red" -gt 1000 ] && [ "$green" -eq 0 ]; then
+            pass "disk_empty: an empty drive shown in red"
+        else
+            fail disk_empty "the empty drive not shown (red $red, green $green)"
+        fi
+    else
+        echo "SKIP  disk activity: no IIe ROM (or MAME's parts for one) in BMAPPLE2_ROMS"
+    fi
+
     echo "Apple IIgs: switching machines"
     # The IIgs's ROM folder with the stand-in IIe ROM added (as APPLE2E.ROM).
     mkdir -p "$OUT/bothroms"
     for f in "$BMAPPLE2_ROMS"/*; do ln -s "$f" "$OUT/bothroms/" 2>/dev/null; done
+    # (rm first: it is a link to the ROM folder's own, which cp would
+    # overwrite)
+    rm -f "$OUT/bothroms/APPLE2E.ROM"
     cp "$TESTROMS/ROM" "$OUT/bothroms/APPLE2E.ROM"
     # Menu, Machine (three down), the IIe (last), and its saved choice.
     run switch 60 "$OUT/bothroms" "" "200 key $F10 1\n201 key $F10 0\n210 key $DOWN 1\n211 key $DOWN 0\n212 key $DOWN 1\n213 key $DOWN 0\n214 key $DOWN 1\n215 key $DOWN 0\n220 key $ENTER 1\n221 key $ENTER 0\n230 key $DOWN 1\n231 key $DOWN 0\n232 key $DOWN 1\n233 key $DOWN 0\n240 key $ENTER 1\n241 key $ENTER 0\n400 shot iie.ppm\n401 quit\n"

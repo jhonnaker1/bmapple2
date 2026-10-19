@@ -94,4 +94,12 @@ void osd_notify(const char *text);
 /* Called by the video output each frame: draws the notification, if any. */
 void osd_draw_notification(uint16_t *fb, int pitch_px, int w, int h);
 
+/* The lines at the bottom of the picture the notification and the disk
+   activity line are drawn in. */
+#define OSD_OVERLAY_LINES 28
+
+/* The disk activity line (see platform.c), drawn on the picture. */
+void osd_draw_disk_status(uint16_t *fb, int pitch_px, int w, int h,
+                          const char *text, int light, int error);
+
 #endif /* BMAPPLE2_OSD_H_ */

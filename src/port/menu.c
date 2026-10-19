@@ -110,7 +110,8 @@ static void choose_screen_size(void)
 
 static void video_menu(void)
 {
-	enum { V_MONITOR, V_SIZE, V_VSYNC, V_RESOLUTION, V_SHADER, V_CURVATURE, V_SMOOTH };
+	enum { V_MONITOR, V_SIZE, V_VSYNC, V_RESOLUTION, V_SHADER, V_CURVATURE, V_SMOOTH,
+	       V_ACTIVITY };
 	/* The Pi 5 only: its firmware ignores hdmi_mode (from BMA800XL). */
 	static const char *const resolutions[] = {"auto", "1920x1080", "1280x720", NULL};
 	static const char *const resolution_names[] = {"Auto", "1920x1080", "1280x720", NULL};
@@ -131,6 +132,7 @@ static void video_menu(void)
 			{"CRT Effect (reboot)", NULL, check(setting_on("crt_shader", FALSE)), V_SHADER},
 			{"CRT Curvature (reboot)", NULL, check(setting_on("crt_curvature", FALSE)), V_CURVATURE},
 			{"Smooth Scaling (reboot)", NULL, check(setting_on("smooth", FALSE)), V_SMOOTH},
+			{"Show Disk Activity", NULL, check(bmapple2_disk_activity()), V_ACTIVITY},
 			{"", NULL, OSD_ITEM_LABEL, -1},
 			{"If your TV cuts off the edges, make", NULL, OSD_ITEM_LABEL, -1},
 			{"the Screen Size smaller.", NULL, OSD_ITEM_LABEL, -1},
@@ -147,6 +149,10 @@ static void video_menu(void)
 		switch (chosen) {
 		case V_SIZE:
 			choose_screen_size();
+			break;
+		case V_ACTIVITY:
+			save_setting("disk_activity", bmapple2_disk_activity() ? "0" : "1");
+			bmapple2_set_disk_activity(!bmapple2_disk_activity());
 			break;
 		case V_RESOLUTION:
 			i = osd_choose("Resolution", resolution_names, res_index);

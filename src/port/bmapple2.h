@@ -49,6 +49,9 @@ void bmapple2_idle(void);
 double bmapple2_refresh_rate(void);
 int bmapple2_vsync_locked(void);
 void bmapple2_video_settings_changed(void);
+/* The disk activity line (disk_activity): on or off. */
+int bmapple2_disk_activity(void);
+void bmapple2_set_disk_activity(int on);
 /* The display's resolution setting changed (the Pi 5). */
 void bmapple2_display_mode_changed(void);
 /* The machines, the one running (-1 if there is no ROM), and choosing
