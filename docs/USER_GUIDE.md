@@ -254,6 +254,41 @@ right date and time. Set `timezone` to your offset from UTC in minutes, for
 example `timezone=600` for UTC+10. (The IIgs keeps its own clock, set in
 its Control Panel.)
 
+### Calling BBSes: the virtual modem
+
+With the network on, the IIgs's modem port (slot 2) has a virtual modem on
+it, KEGS's: a Hayes-compatible modem that "dials" telnet BBSes and other
+servers on the internet. Use it from a terminal program such as ProTERM,
+Spectrum or Talk is Cheap, set to the modem port. Type:
+
+```
+ATDTbbs.example.com:23
+```
+
+with the BBS's name or IP address and port (23, telnet's, if there is
+none). The call is made in the background, so the Apple keeps running
+while it connects: `CONNECT 2400` when it does, `NO CARRIER` if nobody
+answers (which can take a few minutes for an address where nothing is
+there at all). Then type away; the modem's speed is whatever the terminal
+program sets.
+
+Other commands: `+++` (wait a second before and after) to get back to the
+modem, `ATH` to hang up, `ATO` to go back online, `ATZ` to reset it (and
+turn on the word replies), `ATE0` / `ATE1` echo off and on, `ATV0` / `ATV1`
+number or word replies.
+
+Terminal programs often try to set the modem up themselves and may
+complain that they can't; KEGS's notes suggest carrying on, forcing the
+program online (ProTERM: Cmd-Ctrl-T) and typing `ATZ`.
+
+The serial ports are set up in KEGS's configuration (**F4**, *Serial Port
+Configuration*): slot 1 (the printer port) is off by default and slot 2
+the virtual modem. *Use Remote IP* connects a port straight to the address
+and port given there instead, as soon as the Apple sends something (`PR#1`
+from BASIC, say; set *Serial Mask* to *Mask off high bit* for plain text).
+Incoming connections (the modem answering calls, and *Use incoming port
+6501*) aren't supported on the Pi.
+
 ## Options
 
 `cmdline.txt` is a single line of `name=value` options separated by spaces.
@@ -332,6 +367,12 @@ display doesn't accept 720p at 60 Hz; try another `hdmi_mode`.
 Panel.
 
 **Sound breaks up**: raise `audio_buffer_ms` in `cmdline.txt`, e.g. to 100.
+
+**A terminal program can't reach a BBS**: check that the network is on (its
+address shows at the bottom of the screen at start up), that the program
+uses the modem port (slot 2), and the BBS's address and port: `ATDT` then
+the name or IP address, a colon, and the port. `NO CARRIER` means nothing
+answered there.
 
 **A program seems stuck loading**: watch the bottom left of the screen.
 While a 5.25" or 3.5" drive turns, a red light shows there (lit while the

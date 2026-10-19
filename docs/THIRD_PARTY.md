@@ -8,7 +8,7 @@ The original copyright, license, and attribution notices supplied with these com
 
 BMApple2 incorporates [KEGS](https://kegs.sourceforge.net/), the Apple IIgs emulator by Kent Dickey, version 1.38, under the GNU General Public License version 3.
 
-See `third_party/kegs/` (from `https://github.com/david-schmidt/KEGS-upstream.git`, a copy of the releases on SourceForge, branch `v1.38`) for the source and its accompanying copyright and license information (`doc/COPYING.txt`). The Apple II character set BMApple2's menu is drawn with comes from KEGS (`src/kegsfont.h`).
+See `third_party/kegs/` (from `https://github.com/david-schmidt/KEGS-upstream.git`, a copy of the releases on SourceForge, branch `v1.38`) for the source and its accompanying copyright and license information (`doc/COPYING.txt`). The Apple II character set BMApple2's menu is drawn with comes from KEGS (`src/kegsfont.h`). `src/port/scc_socket_driver.c` is KEGS's virtual modem driver, changed for the Pi (the changes are marked in it), under KEGS's licence.
 
 Its notice is in [`sdcard/licenses/kegs.txt`](../sdcard/licenses/kegs.txt); the GNU General Public License version 3 is [`LICENSE`](../LICENSE).
 

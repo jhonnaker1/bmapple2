@@ -16,6 +16,7 @@ OUT := build
 OBJS := $(addprefix $(OUT)/kegs/,$(KEGS_SRCS:.c=.o) $(KEGS_HOST_SRCS:.c=.o)) \
         $(OUT)/port/platform.o $(OUT)/port/keymap.o $(OUT)/port/joystick.o \
         $(OUT)/port/snddrv.o $(OUT)/port/menu.o $(OUT)/port/osd.o \
+        $(OUT)/port/scc_socket_driver.o \
         $(OUT)/host_sim.o $(OUT)/live.o
 
 all: $(OUT)/bmapple2_sim
@@ -28,6 +29,11 @@ $(OUT)/kegs/clock.o: $(KEGS)/clock.c
 	@$(CC) $(CFLAGS) $(KEGS_CLOCK_RENAMES) -w -c -o $@ $<
 
 $(OUT)/kegs/%.o: $(KEGS)/%.c
+	@mkdir -p $(dir $@)
+	@$(CC) $(CFLAGS) -w -c -o $@ $<
+
+# KEGS's code, changed: KEGS's warnings are its own.
+$(OUT)/port/scc_socket_driver.o: $(ROOT)/src/port/scc_socket_driver.c $(ROOT)/src/host.h
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) -w -c -o $@ $<
 

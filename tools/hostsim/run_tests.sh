@@ -143,6 +143,22 @@ TESTROMS=$OUT/testroms
 # USB HID usages used below.
 F10=0x43 DOWN=0x51 ENTER=0x28 POWER=0x66
 
+echo "Sockets"
+# On the Pi the C library's socket calls hold its open files' lock while
+# they wait, and can't be made non-blocking: the port (and its copy of
+# KEGS's modem driver) must use host_tcp_* instead.
+if grep -nE '(^|[^_a-zA-Z])(connect|recv|send|socket|accept|bind|listen|gethostbyname|getaddrinfo)\(' "$HERE/../../src/port/"*.c > /dev/null; then
+    fail sockets "src/port calls the C library's sockets (use host_tcp_*)"
+else
+    pass "sockets: the port uses host_tcp_*, not the C library's sockets"
+fi
+if grep -q "scc_socket_driver.c" "$HERE/../../src/port/kegs.mk" && \
+   grep -A40 "^KEGS_SRCS" "$HERE/../../src/port/kegs.mk" | grep -q "scc_socket_driver.c"; then
+    fail sockets "KEGS's own scc_socket_driver.c is built (src/port's copy replaces it)"
+else
+    pass "sockets: KEGS's scc_socket_driver.c is replaced by src/port's"
+fi
+
 echo "Boot, locked to a 60 Hz display"
 run boot 60 "$TESTROMS" "" '120 shot a.ppm\n121 shot b.ppm\n600 audio\n601 quit\n'
 check_log boot "machine 59\.9[0-9] Hz, synchronised to the display" "locked to 60 Hz"
@@ -415,6 +431,72 @@ PYEOF
     else
         echo "SKIP  disk activity: no IIe ROM (or MAME's parts for one) in BMAPPLE2_ROMS"
     fi
+
+    echo "The virtual modem (slot 2)"
+    # BASIC dials through the modem port's SCC data register ($C03A), as a
+    # terminal program does, collects what comes back (the modem's CONNECT
+    # and the server's WELCOME) and sends it to the server, which checks
+    # it. The connection is made 120 frames late (in the background), and
+    # every frame must still be shown. Then the same to a port nothing
+    # listens on: NO CARRIER, and nothing stops.
+    modem_basic() {
+        printf '%s\n' "300 type 10 A\$=\"ATDT127.0.0.1:$1\":GOSUB 100\\n" \
+            '800 type 20 B$="":FOR J=1 TO 2000:IF PEEK(49208)/2<>INT(PEEK(49208)/2) THEN B$=B$+CHR$(PEEK(49210))\n' \
+            '1700 type 30 NEXT:A$=B$:GOSUB 100:END\n' \
+            '2100 type 100 FOR I=1 TO LEN(A$):POKE 49210,ASC(MID$(A$,I,1)):NEXT:POKE 49210,13:RETURN\n' \
+            '2900 type RUN\n' '4400 audio' '4401 quit'
+    }
+    mkdir -p "$OUT/modem/roms" "$OUT/modem_nc/roms"
+    for f in "$BMAPPLE2_ROMS"/*; do
+        ln -s "$f" "$OUT/modem/roms/" 2>/dev/null
+        ln -s "$f" "$OUT/modem_nc/roms/" 2>/dev/null
+    done
+    python3 - "$OUT/modem/server.log" <<'EOF' &
+import socket, sys
+log = open(sys.argv[1], 'w')
+s = socket.socket()
+s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s.bind(('127.0.0.1', 65514))
+s.listen(1)
+s.settimeout(60)
+c, _ = s.accept()
+log.write('connected\n')
+log.flush()
+c.sendall(b'WELCOME\r\n')
+c.settimeout(60)
+got = b''
+while b'WELCOME' not in got:
+    d = c.recv(256)
+    if not d:
+        break
+    got += d
+log.write('got back %r\n' % got)
+log.flush()
+EOF
+    server=$!
+    sleep 1
+    (cd "$OUT/modem" && modem_basic 65514 | BMAPPLE2_SIM_CONNECT_FRAMES=120 \
+        BMAPPLE2_IP=127.0.0.1 BMAPPLE2_CMDLINE="root=." "$SIM" > log.txt 2>&1)
+    kill $server 2>/dev/null
+    wait $server 2>/dev/null
+    check_log modem "SCC port 1 is now outgoing to 127.0.0.1:65514" "ATDT connects (in the background)"
+    if grep -q "got back .*CONNECT 2400.*WELCOME" "$OUT/modem/server.log" 2>/dev/null; then
+        pass "modem: the Apple got CONNECT 2400 and the server's WELCOME, and sent them back"
+    else
+        fail modem "the Apple didn't get CONNECT and WELCOME (see out/modem/server.log)"
+    fi
+    (cd "$OUT/modem_nc" && modem_basic 65515 | BMAPPLE2_SIM_CONNECT_FRAMES=120 \
+        BMAPPLE2_IP=127.0.0.1 BMAPPLE2_CMDLINE="root=." "$SIM" > log.txt 2>&1)
+    check_log modem_nc "can't connect to 127.0.0.1:65515" "a call nobody answers fails"
+    for name in modem modem_nc; do
+        line=$(grep "frames presented" "$OUT/$name/log.txt" | tail -1)
+        presented=$(echo "$line" | sed 's/.*: \([0-9]*\) frames presented/\1/')
+        if [ "${presented:-0}" -ge 4400 ]; then
+            pass "$name: the Apple kept going while dialling ($presented/4400 frames)"
+        else
+            fail $name "frames presented: $line"
+        fi
+    done
 
     echo "Apple IIgs: switching machines"
     # The IIgs's ROM folder with the stand-in IIe ROM added (as APPLE2E.ROM).

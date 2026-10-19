@@ -8,6 +8,10 @@
 #  - scc_unixdriver.c (a host serial device, set up with termios), replaced
 #    on the Pi by src/port/scc_stub.c; the PC test harness builds it
 #    (KEGS_HOST_SRCS);
+#  - scc_socket_driver.c (the serial ports' virtual modem and network
+#    connections), replaced by BMApple2's changed copy of it,
+#    src/port/scc_socket_driver.c (Circle's sockets, dialling in the
+#    background);
 #  - the front ends (xdriver.c, windriver.c, the Mac's Swift files) and the
 #    sound drivers they use (pulseaudio_driver.c, macsnd_driver.c,
 #    win32snd_driver.c): src/port/platform.c is BMApple2's.
@@ -36,7 +40,6 @@ KEGS_SRCS = \
 	moremem.c \
 	paddles.c \
 	scc.c \
-	scc_socket_driver.c \
 	scc_windriver.c \
 	sim65816.c \
 	smartport.c \

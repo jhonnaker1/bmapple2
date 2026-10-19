@@ -21,6 +21,9 @@
  *   <frame> run <path>             the web UI starts a file
  *   <frame> quit                   end the test
  *
+ * BMAPPLE2_SIM_CONNECT_FRAMES=N makes background work (the modem's
+ * connecting) start N frames late, as a slow server would on the Pi.
+ *
  * BMAPPLE2_SIM_RATE=48000 plays the sound at the Pi 4 and 5's HDMI rate
  * (the latency asked for is taken at 44.1 kHz, as there).
  *
@@ -32,11 +35,15 @@
  * the Raspberry Pi. See LICENSE for licensing details.
  */
 
+#include <errno.h>
+#include <netdb.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/socket.h>
 
 #include "../../src/host.h"
 #include "live.h"
@@ -128,7 +135,8 @@ double host_option_double(const char *name, double default_value)
 static double now = 0.0;
 static double refresh = 60.0;
 static double refresh_later = 0.0;  /* refresh rate after start up */
-static long frame = 0;
+static volatile long frame = 0;
+static long connect_frames = 0;  /* BMAPPLE2_SIM_CONNECT_FRAMES */
 static long presents = 0;
 
 static void tick(void);
@@ -590,6 +598,90 @@ int host_network_address(char *address, unsigned size)
 	return 1;
 }
 
+/* A thread here (a Circle task on the Pi). */
+struct background {
+	void (*fn)(void *);
+	void *arg;
+};
+
+static void *background_thread(void *p)
+{
+	struct background job = *(struct background *)p;
+	long due = frame + connect_frames;
+	free(p);
+	while (frame < due)
+		usleep(1000);
+	job.fn(job.arg);
+	return NULL;
+}
+
+/* TCP connections (host.h): the PC's own sockets; a connection is the
+   socket. */
+int host_tcp_connect(const char *host, const char *port)
+{
+	struct addrinfo hints, *info = NULL;
+	int fd;
+	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_INET;
+	hints.ai_socktype = SOCK_STREAM;
+	if (getaddrinfo(host, port, &hints, &info) != 0 || info == NULL)
+		return -2;
+	fd = socket(info->ai_family, info->ai_socktype, info->ai_protocol);
+	if (fd >= 0 && connect(fd, info->ai_addr, info->ai_addrlen) < 0) {
+		close(fd);
+		fd = -1;
+	}
+	freeaddrinfo(info);
+	return fd < 0 ? -1 : fd;
+}
+
+int host_tcp_recv(int connection, void *buffer, unsigned size)
+{
+	ssize_t got = recv(connection, buffer, size, MSG_DONTWAIT);
+	if (got > 0)
+		return (int) got;
+	if (got < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR))
+		return 0;
+	return -1;   /* closed, or broken */
+}
+
+int host_tcp_send(int connection, const void *buffer, unsigned size)
+{
+	ssize_t sent;
+	if (size == 0)
+		return 0;
+#ifdef MSG_NOSIGNAL
+	sent = send(connection, buffer, size, MSG_DONTWAIT | MSG_NOSIGNAL);
+#else
+	sent = send(connection, buffer, size, MSG_DONTWAIT);
+#endif
+	if (sent >= 0)
+		return (int) sent;
+	return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR ? 0 : -1;
+}
+
+void host_tcp_close(int connection)
+{
+	if (connection >= 0)
+		close(connection);
+}
+
+int host_run_in_background(void (*fn)(void *arg), void *arg)
+{
+	struct background *job = malloc(sizeof(*job));
+	pthread_t thread;
+	if (job == NULL)
+		return 0;
+	job->fn = fn;
+	job->arg = arg;
+	if (pthread_create(&thread, NULL, background_thread, job) != 0) {
+		free(job);
+		return 0;
+	}
+	pthread_detach(thread);
+	return 1;
+}
+
 void host_network_status(char *text, unsigned size)
 {
 	char ip[32];
@@ -694,6 +786,9 @@ int main(void)
 	r = getenv("BMAPPLE2_REFRESH");
 	if (r)
 		refresh = atof(r);
+	r = getenv("BMAPPLE2_SIM_CONNECT_FRAMES");
+	if (r)
+		connect_frames = atol(r);
 	r = getenv("BMAPPLE2_REFRESH_LATER");
 	if (r)
 		refresh_later = atof(r);

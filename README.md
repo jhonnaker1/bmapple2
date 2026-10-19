@@ -33,7 +33,8 @@ it available; see the [third-party](docs/THIRD_PARTY.md) acknowledgements.
   the machine, a colour or monochrome monitor (white, green or amber), the
   volume, video, sound and network
 - Optional Ethernet or Wi-Fi with BMC64's web UI: manage the SD card from a
-  browser and start disk images
+  browser and start disk images; and a virtual modem on the modem port, to
+  call telnet BBSes from a terminal program (`ATDTbbs.example.com:23`)
 
 ## ROMs
 

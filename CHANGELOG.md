@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+- The virtual modem works on the Pi: from a terminal program on the modem
+  port (slot 2), `ATDTbbs.example.com:23` calls a telnet BBS. KEGS only
+  built its network code for Linux, macOS and Windows, so on the Pi the
+  modem did nothing; BMApple2 now has its own copy of it, on Circle's
+  sockets, dialling in the background so that the Apple keeps running
+  while it connects (`CONNECT`, or `NO CARRIER`). *Use Remote IP* works
+  too; incoming connections aren't supported. See "Calling BBSes" in the
+  User Guide
+- Tests: dialling a stand-in BBS through the modem, and a call nobody
+  answers
+
 ## 0.4.0 – 2026-10-19
 
 - Pi Zero, 2, 3 and 4: run the ARM at its full clock (from BMCoco 0.5.3).

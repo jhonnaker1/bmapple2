@@ -34,7 +34,8 @@ KEGS_LIB := $(BUILD)/libkegs.a
 OBJS = src/main.o src/kernel.o src/logging.o src/options.o \
        src/port/platform.o src/port/keymap.o src/port/joystick.o \
        src/port/snddrv.o src/port/menu.o src/port/osd.o \
-       src/port/scc_stub.o src/port/posix_extra.o src/port/fswrap.o \
+       src/port/scc_stub.o src/port/scc_socket_driver.o src/port/posix_extra.o \
+       src/port/fswrap.o \
        src/network.o src/network_time_sync.o \
        src/webui/webui.o src/webui/webui_http.o src/webui/webui_fs.o \
        src/webui/webui_machine.o src/webui/webui_assets.o \
