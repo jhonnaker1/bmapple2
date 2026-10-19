@@ -10,8 +10,11 @@
  * child_sound_playit() from sound_driver.c, without the child.
  *
  * The emulation runs at the display's pace or a timer's, never quite the
- * sound output's, so the output is kept about half full by dropping or
- * repeating a sample when it strays (as BMCoco does).
+ * sound output's (a IIgs's 59.92 Hz locked to a 60 Hz display is 0.13%
+ * fast), so the output is kept about half full: the sound is squeezed or
+ * stretched a little, the more the further the buffer is from half full,
+ * up to 2% (as BMCoco does). Dropping a whole sample, or what doesn't fit,
+ * clicks.
  *
  * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
  * the Raspberry Pi. See LICENSE for licensing details.
@@ -89,8 +92,12 @@ void bmapple2_sound_open(void)
 		ms = 20;
 	if (ms > 500)
 		ms = 500;
-	out_latency = AO_RATE * ms / 1000;
-	out_rate = host_sound_open(AO_RATE, 2, out_latency);
+	/* The output may run at another rate (the VideoCore's 44.1 kHz on the
+	   Pi Zero to 3): KEGS then makes its sound at that rate, and the
+	   buffer is counted in its frames. The latency is asked for in
+	   44.1 kHz frames (host.h). */
+	out_rate = host_sound_open(AO_RATE, 2, 44100 * ms / 1000);
+	out_latency = (out_rate ? out_rate : AO_RATE) * ms / 1000;
 	if (out_rate == 0)
 		printf("BMApple2: no sound\n");
 }
@@ -111,26 +118,78 @@ void bmapple2_feed_silence(void)
 	}
 }
 
-/* N stereo frames to the output, a frame dropped or repeated as needed. */
-static void play(const int16_t *samples, unsigned n)
+#define PLAY_CHUNK 512
+
+/* N stereo frames resampled to WANT (linear interpolation, in 16.16 fixed
+   point) into OUT. */
+static void resample(const int16_t *in, unsigned n, int16_t *out, unsigned want)
 {
-	static int16_t extra[2];
-	unsigned free_frames, used;
-	if (out_rate == 0 || n == 0)
-		return;
+	unsigned i, ch;
+	for (i = 0; i < want; i++) {
+		uint32_t pos = want > 1 ? (uint32_t) (((uint64_t) i * (n - 1) << 16) / (want - 1)) : 0;
+		unsigned k = pos >> 16;
+		int frac = (int) (pos & 0xffff);
+		for (ch = 0; ch < 2; ch++) {
+			int a = in[k * 2 + ch];
+			int b = k + 1 < n ? in[(k + 1) * 2 + ch] : a;
+			out[i * 2 + ch] = (int16_t) (a + (((b - a) * frac) >> 16));
+		}
+	}
+}
+
+/* Up to PLAY_CHUNK stereo frames to the output, squeezed or stretched to
+   keep the buffer about half full. */
+static void play_chunk(const int16_t *samples, unsigned n)
+{
+	static int16_t buf[(PLAY_CHUNK * 2 + 1) * 2];
+	static double carry;   /* the fraction of a frame left over */
+	unsigned free_frames, used, want;
 	free_frames = host_sound_free_frames();
 	used = free_frames < out_latency ? out_latency - free_frames : 0;
-	if (used > (out_latency * 3) / 4 && n > 1)
-		n--;                          /* getting full: one less */
+	if (n < 2) {
+		want = n;
+	} else if (used < out_latency / 4) {
+		/* Running dry (the emulation slower than real time: a Pi too
+		   slow for it): stretched to up to twice its length, lower in
+		   pitch, rather than gaps. */
+		unsigned quarter = out_latency / 4;
+		want = n + 1 + n * (quarter - used) / quarter;
+		if (want > PLAY_CHUNK * 2 + 1)
+			want = PLAY_CHUNK * 2 + 1;
+		carry = 0.0;
+	} else {
+		double half = out_latency / 2.0;
+		double error = (half - used) / half;   /* 1 empty, -1 full */
+		double exact;
+		if (error > 1.0)
+			error = 1.0;
+		if (error < -1.0)
+			error = -1.0;
+		exact = n * (1.0 + 0.02 * error) + carry;
+		want = (unsigned) exact;
+		carry = exact - want;
+	}
+	if (want != n) {
+		resample(samples, n, buf, want);
+		samples = buf;
+		n = want;
+	}
 	if (n > free_frames)
-		n = free_frames;          /* no room at all: drop the rest */
+		n = free_frames;          /* no room at all (far ahead): drop it */
 	if (n > 0)
 		write_frames(samples, n);
-	if (used < out_latency / 4 && n > 0) {
-		/* running dry: the last frame once more */
-		extra[0] = samples[(n - 1) * 2];
-		extra[1] = samples[(n - 1) * 2 + 1];
-		write_frames(extra, 1);
+}
+
+/* N stereo frames to the output. */
+static void play(const int16_t *samples, unsigned n)
+{
+	if (out_rate == 0)
+		return;
+	while (n > 0) {
+		unsigned m = n > PLAY_CHUNK ? PLAY_CHUNK : n;
+		play_chunk(samples, m);
+		samples += m * 2;
+		n -= m;
 	}
 }
 

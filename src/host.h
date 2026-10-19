@@ -50,7 +50,10 @@ void host_video_present(int wait_vsync);
 
 /* ---- Sound --------------------------------------------------------------- */
 
-/* Opens audio output; returns the sample rate in use (0 on failure). */
+/* Opens audio output; returns the sample rate in use (0 on failure), which
+   may not be FREQ: the Pi Zero to 3 play at 44.1 kHz, the Pi 4 and 5's
+   HDMI at 48 kHz. LATENCY_FRAMES, how much to keep queued, is in frames at
+   44.1 kHz. */
 unsigned host_sound_open(unsigned freq, int channels, unsigned latency_frames);
 void host_sound_close(void);
 /* Frames that can be written without exceeding the latency. */

@@ -155,6 +155,24 @@ else
     pass "boot: a new frame every display refresh"
 fi
 
+echo "Sound on a 60 Hz display, at 44.1 and 48 kHz"
+# The IIe's 59.92 Hz locked to 60 Hz runs 0.13% fast: the sound must be
+# slowed to fit, never cut off with the buffer full (which clicks), at the
+# VideoCore's 44.1 kHz and the Pi 4 and 5's 48 kHz. (Dropping a frame of
+# sound now and then filled it within a minute.)
+for rate in 44100 48000; do
+    BMAPPLE2_SIM_RATE=$rate run sound$rate 60 "$TESTROMS" "" '2400 audio\n2401 quit\n'
+    line=$(grep "audio written" "$OUT/sound$rate/log.txt" | tail -1)
+    max=$(echo "$line" | sed 's/.*after write max \([0-9]*\).*/\1/')
+    cap=$(grep "sound open" "$OUT/sound$rate/log.txt" | head -1 | sed 's/.*, \([0-9]*\) frames.*/\1/')
+    if [ -n "$max" ] && [ -n "$cap" ] && [ "$max" -le $((cap * 90 / 100)) ]; then
+        pass "sound$rate: the sound buffer never fills ($max of $cap)"
+    else
+        fail sound$rate "the sound buffer filled: $line (capacity $cap)"
+    fi
+    check_audio sound$rate
+done
+
 echo "On a 50 Hz display"
 run timer 50 "$TESTROMS" "" '600 audio\n601 quit\n'
 check_log timer "timer paced" "falls back to timer pacing"
