@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 – 2026-10-19
 
 - Pi Zero, 2, 3 and 4: run the ARM at its full clock (from BMCoco 0.5.3).
   Without an operating system asking for more the firmware left it at its
