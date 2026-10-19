@@ -90,7 +90,7 @@ or D-pad move, **Return** or **A** chooses.
 | Reset          | The reset key (Ctrl+F12) |
 | Restart        | Starts the machine again, as switching it off and on does: it boots from its disks |
 | Machine        | Apple IIgs with ROM 3, IIgs with ROM 01, or Apple IIe: those there are ROMs for (see ROMs). Choosing one starts it |
-| Video          | The monitor (colour, or a black and white, green or amber monochrome one), the screen size (smaller for a TV that cuts off the edges), the frame lock, CRT effect and smooth scaling, and the disk activity light |
+| Video          | The monitor (colour, or a black and white, green or amber monochrome one), the screen size (smaller for a TV that cuts off the edges), the frame lock, the resolution (Pi 5), the CRT effect and its curvature, smooth scaling, and the disk activity light |
 | Sound          | The volume, and HDMI or the headphone jack |
 | Network        | Ethernet or Wi-Fi, the web UI (see below) |
 | About          | Versions, the ROM, display and network |

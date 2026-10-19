@@ -27,7 +27,8 @@ Put your disk images in the disks folder (or anywhere).
 Networking: choose Ethernet or Wi-Fi under Network in the menu (or add
 network=ethernet or network=wifi to cmdline.txt), then open the address
 shown on screen in a browser to manage the files on this card and start
-disk images.
+disk images. The modem port (slot 2) then has a virtual modem: from a
+terminal program, ATDTbbs.example.com:23 calls a telnet BBS.
 
 Licences: BMApple2 is under the GPL version 3 (LICENSE.txt); the licenses
 folder has the notices for other projects' code it includes, and the

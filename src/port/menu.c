@@ -94,7 +94,7 @@ static void choose_screen_size(void)
 	};
 	static const int sizes[] = {100, 95, 90, 85, 80};
 	int size = screen_size(), current = 0, k, i;
-	char text[8];
+	char text[16];
 	for (k = 1; k < 5; k++) {
 		int d = sizes[k] - size, best = sizes[current] - size;
 		if ((d < 0 ? -d : d) < (best < 0 ? -best : best))
