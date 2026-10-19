@@ -90,7 +90,7 @@ or D-pad move, **Return** or **A** chooses.
 | Reset          | The reset key (Ctrl+F12) |
 | Restart        | Starts the machine again, as switching it off and on does: it boots from its disks |
 | Machine        | Apple IIgs with ROM 3, IIgs with ROM 01, or Apple IIe: those there are ROMs for (see ROMs). Choosing one starts it |
-| Video          | The monitor (colour, or a black and white, green or amber monochrome one), the frame lock, CRT effect and smooth scaling |
+| Video          | The monitor (colour, or a black and white, green or amber monochrome one), the screen size (smaller for a TV that cuts off the edges), the frame lock, CRT effect and smooth scaling |
 | Sound          | The volume, and HDMI or the headphone jack |
 | Network        | Ethernet or Wi-Fi, the web UI (see below) |
 | About          | Versions, the ROM, display and network |
@@ -265,7 +265,7 @@ settings (F4) and `config.kegs` instead.
 | Option              | Values                       | Default  | What it does |
 |---------------------|------------------------------|----------|--------------|
 | `aspect`            | number                       | `1.0`    | Multiplies the width of the picture |
-| `scale`             | 0.1 to 1.0                   | `1.0`    | Height of the picture as a fraction of the screen |
+| `scale`             | 0.1 to 1.0                   | `1.0`    | Height of the picture as a fraction of the screen (Video, Screen Size; less for a TV that cuts off the edges) |
 | `smooth`            | `0`, `1`                     | `0`      | Bilinear filtering instead of sharp pixels |
 | `crt_shader`        | `0`, `1`                     | `0`      | CRT look (scanlines) from BMC64 |
 | `crt_curvature`     | `0`, `1`                     | `0`      | With `crt_shader`, a curved screen |
@@ -331,6 +331,11 @@ display doesn't accept 720p at 60 Hz; try another `hdmi_mode`.
 Panel.
 
 **Sound breaks up**: raise `audio_buffer_ms` in `cmdline.txt`, e.g. to 100.
+
+**The TV cuts off the top and bottom of the picture or the menu**: many TVs
+enlarge the picture and crop its edges (overscan). Make *Video*, *Screen
+Size* smaller (90% usually does), or turn overscan off on the TV ("Just
+Scan", "Screen Fit" or "1:1").
 
 **Keyboard, mouse or gamepad not working**: unplug it and plug it in again;
 devices can come and go while the emulator runs. Some keyboards need a

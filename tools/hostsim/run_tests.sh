@@ -206,6 +206,25 @@ has_colour menu menu 255 129 0 "the menu shows its selection bar"
 differ menu menu video
 same menu before after
 
+echo "Screen size"
+# Menu, Video, Screen Size, down two from 100% to 90%: saved as scale=0.90
+# (for a TV that cuts off the edges).
+run size 60 "$TESTROMS" "" "130 key $F10 1\n131 key $F10 0\n140 key $DOWN 1\n141 key $DOWN 0\n142 key $DOWN 1\n143 key $DOWN 0\n144 key $DOWN 1\n145 key $DOWN 0\n146 key $DOWN 1\n147 key $DOWN 0\n150 key $ENTER 1\n151 key $ENTER 0\n160 key $DOWN 1\n161 key $DOWN 0\n170 key $ENTER 1\n171 key $ENTER 0\n180 key $DOWN 1\n181 key $DOWN 0\n182 key $DOWN 1\n183 key $DOWN 0\n190 key $ENTER 1\n191 key $ENTER 0\n200 shot video.ppm\n201 quit\n"
+if grep -q "^scale=0.90" "$OUT/size/bmapple2.cfg" 2>/dev/null; then
+    pass "size: Video > Screen Size 90% saved as scale=0.90"
+else
+    fail size "scale=0.90 not in bmapple2.cfg (see out/size/log.txt)"
+fi
+
+echo "GPIO joysticks in the menu"
+# Down four times and fire on GPIO joystick 1: the same page as Down and
+# Enter on the keyboard (Video).
+run gpiomenu 60 "$TESTROMS" "gpio_joysticks=1" "130 key $F10 1\n131 key $F10 0\n136 shot menu.ppm\n140 gpio 0 0x02\n142 gpio 0 0\n146 gpio 0 0x02\n148 gpio 0 0\n152 gpio 0 0x02\n154 gpio 0 0\n158 gpio 0 0x02\n160 gpio 0 0\n170 gpio 0 0x10\n172 gpio 0 0\n190 shot gpio.ppm\n191 quit\n"
+run keymenu 60 "$TESTROMS" "gpio_joysticks=1" "130 key $F10 1\n131 key $F10 0\n140 key $DOWN 1\n141 key $DOWN 0\n146 key $DOWN 1\n147 key $DOWN 0\n152 key $DOWN 1\n153 key $DOWN 0\n158 key $DOWN 1\n159 key $DOWN 0\n170 key $ENTER 1\n171 key $ENTER 0\n190 shot keys.ppm\n191 quit\n"
+cp "$OUT/keymenu/keys.ppm" "$OUT/gpiomenu/keys.ppm" 2>/dev/null
+differ gpiomenu menu gpio
+same gpiomenu gpio keys
+
 echo "Gamepad opens the menu"
 run padmenu 60 "$TESTROMS" "" '120 pad 0 0\n130 pad 0 0x0100\n135 pad 0 0\n150 shot menu.ppm\n151 quit\n'
 has_colour padmenu menu 255 129 0 "Home opens the menu"
@@ -275,8 +294,9 @@ else
 fi
 
 echo "Settings are saved"
-# Menu, Video, CRT Effect (on, two down past Monitor and Frame Lock), close.
-run settings 60 "$TESTROMS" "" "120 key $F10 1\n121 key $F10 0\n130 key $DOWN 1\n131 key $DOWN 0\n132 key $DOWN 1\n133 key $DOWN 0\n134 key $DOWN 1\n135 key $DOWN 0\n136 key $DOWN 1\n137 key $DOWN 0\n140 key $ENTER 1\n141 key $ENTER 0\n150 key $DOWN 1\n151 key $DOWN 0\n152 key $DOWN 1\n153 key $DOWN 0\n160 key $ENTER 1\n161 key $ENTER 0\n170 key $F10 1\n171 key $F10 0\n200 quit\n"
+# Menu, Video, CRT Effect (on, three down past Monitor, Screen Size and
+# Frame Lock), close.
+run settings 60 "$TESTROMS" "" "120 key $F10 1\n121 key $F10 0\n130 key $DOWN 1\n131 key $DOWN 0\n132 key $DOWN 1\n133 key $DOWN 0\n134 key $DOWN 1\n135 key $DOWN 0\n136 key $DOWN 1\n137 key $DOWN 0\n140 key $ENTER 1\n141 key $ENTER 0\n150 key $DOWN 1\n151 key $DOWN 0\n152 key $DOWN 1\n153 key $DOWN 0\n154 key $DOWN 1\n155 key $DOWN 0\n160 key $ENTER 1\n161 key $ENTER 0\n170 key $F10 1\n171 key $F10 0\n200 quit\n"
 if grep -q "^crt_shader=1" "$OUT/settings/bmapple2.cfg" 2>/dev/null; then
     pass "settings: Video > CRT Effect saved to bmapple2.cfg"
 else
