@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.1 – 2026-10-19
 
 - The virtual modem works on the Pi: from a terminal program on the modem
   port (slot 2), `ATDTbbs.example.com:23` calls a telnet BBS. KEGS only
