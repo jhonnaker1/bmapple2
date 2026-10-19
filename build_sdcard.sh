@@ -109,8 +109,8 @@ then
     fi
 fi
 
-# The PC tests. With --skip-patches the hostsim tests use atari800 as it is
-# (patched by the last build) rather than resetting it.
+# The PC tests (tools/hostsim without real ROMs: set BMAPPLE2_ROMS to test
+# with them too).
 if [ "$SKIP_TESTS" -eq 0 ]
 then
     echo "=============================================================="
@@ -123,12 +123,7 @@ then
             exit 1
         fi
     }
-    if [ "$SKIP_PATCHES" -eq 1 ] && [ -n "$(built_board)" ]
-    then
-        run_tests "$SRC_DIR/tools/hostsim/run_tests.sh" --skip-patches
-    else
-        run_tests "$SRC_DIR/tools/hostsim/run_tests.sh"
-    fi
+    run_tests "$SRC_DIR/tools/hostsim/run_tests.sh"
     run_tests "$SRC_DIR/tools/pi4kms/run_tests.sh"
     run_tests "$SRC_DIR/tools/pi4scaler/run_tests.sh"
 fi

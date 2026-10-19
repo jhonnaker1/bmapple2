@@ -56,6 +56,10 @@ and Pi 400, and `kernel_2712.img` for the Pi 5, Pi 500 and Pi 500+.
 `./build_sdcard.sh pi4 pi5` several. Copy the contents of that folder to the root of a FAT32
 formatted SD card.
 
+The PC tests (`tools/hostsim`, `tools/pi4kms` and `tools/pi4scaler`, below)
+run first, and the build stops if any of them fails; `--skip-tests` leaves
+them out.
+
 While developing, `./build_sdcard.sh --skip-patches` keeps the third party
 libraries already built and only rebuilds the kernel, which takes seconds.
 The libraries are built for one board at a time, so without a board it
