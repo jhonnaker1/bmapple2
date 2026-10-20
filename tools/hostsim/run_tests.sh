@@ -385,6 +385,20 @@ if [ -n "${BMAPPLE2_ROMS:-}" ]; then
     differ iigs boot hello
     no_underruns iigs
 
+    echo "The mouse's other buttons (a IIgs)"
+    # The same, with the right button and then the wheel clicked first: the
+    # IIgs mouse has one button, and KEGS took the right one (as its middle)
+    # as a halt into its debugger, freezing the IIgs, and the wheel (as its
+    # right) as a speed change. Ignored, the IIgs runs on just the same.
+    run mousebuttons 60 "$BMAPPLE2_ROMS" "" '300 mouse 0 0 2\n302 mouse 0 0 0\n304 mouse 0 0 4\n306 mouse 0 0 0\n310 type PRINT "HELLO"\\n\n500 shot hello.ppm\n501 quit\n'
+    if grep -qE "Middle button pressed|Toggling g_limit_speed" "$OUT/mousebuttons/log.txt"; then
+        fail mousebuttons "KEGS acted on a button (see out/mousebuttons/log.txt)"
+    else
+        pass "mousebuttons: the right button and the wheel reach nothing"
+    fi
+    cp "$OUT/iigs/hello.ppm" "$OUT/mousebuttons/plain.ppm" 2>/dev/null
+    same mousebuttons hello plain
+
     echo "Disk activity (a IIe, its ROM made from MAME's)"
     # Booting a blank 5.25" disk: the light and S6 D1 T00 at the bottom
     # left. With the drive empty the IIe's boot ROM spins it for ever: "no

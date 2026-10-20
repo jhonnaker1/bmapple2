@@ -171,6 +171,8 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `src/port/keymap.c`          | USB HID usages to ADB key codes             |
 | `src/port/menu.c`, `osd.c`   | The menu and its on-screen display          |
 | `src/port/scc_stub.c`        | KEGS's host serial port driver, for a Pi with none |
+| `src/port/scc_socket_driver.c` | KEGS's virtual modem, changed for Circle's sockets and dialling in the background (marked `BMAPPLE2`) |
+| `src/port/fswrap.c`          | `stat()` of the SD card's root, which FatFs can't do (`--wrap=stat`) |
 | `src/port/posix_extra.c`     | waitpid() for newlib                        |
 | `src/port/compat/`           | Empty stand-ins for headers newlib lacks    |
 | `src/port/kegs.mk`           | Which KEGS sources are built                |

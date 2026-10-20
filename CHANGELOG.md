@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fixed: the mouse's right button froze the IIgs, and its wheel's click
+  changed the emulation's speed. KEGS takes its desktop versions' middle
+  button as a request to stop in its debugger and the right one as a speed
+  change, and the USB mouse's buttons came in another order; the IIgs mouse
+  has one button, so only the left one is passed on now
+
 ## 0.4.1 – 2026-10-19
 
 - The virtual modem works on the Pi: from a terminal program on the modem

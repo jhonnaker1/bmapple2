@@ -865,8 +865,14 @@ static void process_input(void)
 	}
 
 	if (host_mouse_read(&dx, &dy, &buttons)) {
-		/* 0x1000: x and y are deltas (adb.c). */
-		adb_update_mouse(main_kimage, dx, dy, buttons & 7, 0x1000 | 7);
+		/* 0x1000: x and y are deltas (adb.c). Only the left button: the
+		   IIgs mouse has one. KEGS takes its desktop versions' middle
+		   button (bit 1) as a request to stop in its debugger, and the
+		   right (bit 2) as one to change speed; the USB mouse gives
+		   right as bit 1 and middle as bit 2, so passed on as they
+		   were, the right button froze the emulation and the wheel's
+		   click changed its speed. */
+		adb_update_mouse(main_kimage, dx, dy, buttons & 1, 0x1000 | 1);
 	}
 
 	/* Gamepad Home, or Select and Start together, open the menu (A, B and

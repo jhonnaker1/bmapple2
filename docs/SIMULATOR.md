@@ -163,6 +163,10 @@ Useful settings, as environment variables:
 | `BMAPPLE2_CMDLINE`           | Options as in `cmdline.txt` (`root=.` is the SD card)       |
 | `BMAPPLE2_REFRESH`           | The display's refresh rate (default 60)                     |
 | `BMAPPLE2_SIM_RATE`          | The sound output's rate (48000 for a Pi 4 or 5's HDMI)      |
+| `BMAPPLE2_IP`                | Pretend the network is up with this address (from frame 100): needed for the modem to call a BBS |
+| `BMAPPLE2_SIM_CONNECT_FRAMES`| Make the modem's calls start this many frames late, like a slow server |
+| `BMAPPLE2_WIFI`              | Pretend Wi-Fi is running, with a few networks to choose from |
+| `BMAPPLE2_REFRESH_LATER`     | Change the display's refresh rate to this at frame 30: a display slightly off its first measurement |
 
 ## On the Pi itself
 
