@@ -1,12 +1,16 @@
 # Changelog
 
-## Unreleased
+## 0.4.2 – 2026-10-20
 
 - Fixed: the mouse's right button froze the IIgs, and its wheel's click
   changed the emulation's speed. KEGS takes its desktop versions' middle
   button as a request to stop in its debugger and the right one as a speed
   change, and the USB mouse's buttons came in another order; the IIgs mouse
   has one button, so only the left one is passed on now
+- Documentation: the installation guide lists all five kernels (and a Pi
+  4 or 5's "not found" screen when they're in a folder), the User Guide's
+  Video menu has Resolution and CRT Curvature, and the SD card's README
+  mentions the modem
 
 ## 0.4.1 – 2026-10-19
 
