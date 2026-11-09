@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.3 – unreleased
+## 0.4.3 – 2026-11-09
 
 - Fixed: BMApple2 never started on a Raspberry Pi: a black screen, and no
   log even with `enable_logging=file`. Its kernels are larger than the
