@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.3 – unreleased
+
+- Fixed: BMApple2 never started on a Raspberry Pi: a black screen, and no
+  log even with `enable_logging=file`. Its kernels are larger than the
+  memory Circle sets aside for them (KEGS's debugger logs, which BMApple2
+  doesn't use, are 128 MB of it), and Circle stops at once when a kernel
+  doesn't fit, before anything can be shown or logged. The space is now
+  160 MB, and the build fails if a kernel doesn't fit. Shown in QEMU: 0.4.2
+  stops in Circle's start-up with nothing on the serial port, the fixed
+  kernels start BMApple2 (Pi Zero and Pi 4)
+
 ## 0.4.2 – 2026-10-20
 
 - Fixed: the mouse's right button froze the IIgs, and its wheel's click

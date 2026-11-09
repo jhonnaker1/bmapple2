@@ -161,7 +161,12 @@ echo "BUILD CIRCLE-STDLIB for Raspberry Pi $RASPI"
 echo "=============================================================="
 cd "$CIRCLE_STDLIB"
 find . -name config.cache -delete
-bash ./configure --raspberrypi=$RASPI --kernel-max-size 16 "${CONFIGURE_PREFIX[@]}"
+# The kernel, its BSS included, must fit in KERNEL_MAX_SIZE, or Circle halts
+# at start without a word (a black screen, no log): KEGS's debugger logs
+# (g_pc_log_array and g_data_log_array in debugger.c) are 128 MB of BSS,
+# which BMApple2 never uses but can't make smaller without changing KEGS.
+# build_sdcard.sh checks each kernel against it.
+bash ./configure --raspberrypi=$RASPI --kernel-max-size 160 "${CONFIGURE_PREFIX[@]}"
 make -C libs/circle clean >/dev/null 2>&1 || true
 make -j"$(nproc)"
 

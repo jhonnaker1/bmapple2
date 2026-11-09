@@ -185,6 +185,29 @@ do
         echo "Expected kernel was not created: $kernel" >&2
         exit 1
     fi
+    # Circle halts at start, without a word, if the kernel (its BSS
+    # included) ends past KERNEL_MAX_SIZE (make_all.sh's --kernel-max-size):
+    # BMApple2 0.4.2 and earlier did, on every Pi.
+    if [ "$board" = "pi4" ] || [ "$board" = "pi5" ]
+    then
+        export BMAPPLE2_AARCH=64
+        nm_tool=aarch64-none-elf-nm
+        start=0x80000
+    else
+        export BMAPPLE2_AARCH=32
+        nm_tool=arm-none-eabi-nm
+        start=0x8000
+    fi
+    command -v "$nm_tool" >/dev/null 2>&1 || source "$SRC_DIR/get_gnu_toolchain.sh"
+    elf=$SRC_DIR/${kernel%.img}.elf
+    max=$(sed -n 's/.*-DKERNEL_MAX_SIZE=\(0x[0-9A-Fa-f]*\).*/\1/p' "$SRC_DIR/third_party/circle-stdlib/Config.mk" | head -1)
+    end=$("$nm_tool" "$elf" | awk '$3 == "_end" {print $1}')
+    if [ -z "$max" ] || [ -z "$end" ] || [ $(( 0x$end - start )) -gt $(( max )) ]
+    then
+        echo "$kernel is too big for KERNEL_MAX_SIZE (${max:-unknown}): raise --kernel-max-size in make_all.sh" >&2
+        exit 1
+    fi
+    echo "$kernel: $(( (0x$end - start) / 1048576 )) MB of $(( max / 1048576 )) MB"
     cp "$SRC_DIR/$kernel" "$STAGING_DIR/"
     if [ "$board" = "pi4" ]
     then
