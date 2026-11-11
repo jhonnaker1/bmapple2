@@ -100,7 +100,8 @@ To restart the machine (as switching it off and on does), choose *Restart*
 in the F10 menu.
 
 Gamepads are the joystick: the left stick or D-pad moves, **A** and **B** are
-buttons 0 and 1, **X** types Space and **Y** Return. **Home**, or
+buttons 0 and 1 (**X** and **Y** too; `pad_keys=1` has them type Space and
+Return). **Home**, or
 **Select+Start** together, opens the menu, where the D-pad moves, **A**
 chooses and **B** goes back.
 

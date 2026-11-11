@@ -145,9 +145,13 @@ paddles 2 and 3. Each takes its input from:
 |-----------------|-----------------------------------|
 | A               | Button 0 (gamepad 2: button 2)    |
 | B               | Button 1                          |
-| X               | Space                             |
-| Y               | Return                            |
+| X               | Button 0, as A (gamepad 2: button 2) |
+| Y               | Button 1, as B                    |
 | Home, Select+Start | BMApple2's menu                |
+
+The buttons type no keys, as an Apple joystick's don't (a game waiting for
+a key would otherwise take a press of fire as one). `pad_keys=1` in
+`cmdline.txt` has X type Space and Y Return instead, as before 0.4.4.
 
 KEGS's *Joystick* setting (F4) must be *Native Joystick 1*, which is
 BMApple2's default; KEGS's own default is the keypad (the numeric keypad's
@@ -317,6 +321,7 @@ settings (F4) and `config.kegs` instead.
 | `audio_out`         | `auto`, `hdmi`, `headphones` | `auto`   | Where the sound goes (`auto`: HDMI, or the headphone jack if the display takes no sound) |
 | `audio_buffer_ms`   | 20 to 500                    | `60`     | Sound buffer; raise it if the sound breaks up |
 | `gpio_joysticks`    | `0`, `1`                     | `0`      | Joysticks on the GPIO header |
+| `pad_keys`          | `0`, `1`                     | `0`      | The gamepads' X and Y type Space and Return rather than being buttons 0 and 1 (see Joysticks) |
 | `enable_logging`    | `off`, `uart`, `file`        | `off`    | Where the log goes (see Logging) |
 | `network`           | `off`, `ethernet`, `wifi`    | `off`    | Networking (see Networking and the web UI) |
 | `webui`             | `0`, `1`                     | `1`      | Web UI when networking is on |

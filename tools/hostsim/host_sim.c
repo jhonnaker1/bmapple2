@@ -527,6 +527,13 @@ static void run_script(void)
 			        frame, snd_written, snd_writes, snd_min_fill, snd_max_fill, snd_underruns,
 			        snd_nonzero);
 			fprintf(stderr, "[sim] frame %ld: %ld frames presented\n", frame, presents);
+		} else if (strcmp(cmd, "buttons") == 0) {
+			/* The Apple's joystick buttons as KEGS has them (joystick.c):
+			   bit 0 button 0, 1 button 1, 2 button 2. */
+			extern int g_paddle_buttons;
+			extern void joystick_update_buttons(void);
+			joystick_update_buttons();
+			fprintf(stderr, "[sim] frame %ld: buttons %x\n", frame, g_paddle_buttons & 7);
 		} else if (strcmp(cmd, "c025") == 0) {
 			/* KEGS's keyboard modifiers ($C025): bit 2 Caps Lock. */
 			extern unsigned int g_c025_val;   /* KEGS's word32 */

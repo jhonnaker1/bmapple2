@@ -82,6 +82,10 @@ int bmapple2_pending_requests(void);
 /* Opens KEGS's own configuration screen (F4). */
 void bmapple2_kegs_config(void);
 
+/* platform.c: pad_keys=1, the gamepads' X and Y type Space and Return
+   rather than being buttons. */
+int bmapple2_pad_keys(void);
+
 /* keymap.c: USB HID usage to Apple ADB key code, or -1. */
 int bmapple2_usage_to_adb(int usage);
 

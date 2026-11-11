@@ -7,7 +7,13 @@
   Apple's Caps Lock locks down, a PC's springs back; each press now turns
   it on or off, as in KEGS's Windows version, with the keyboard's Caps
   Lock light showing which (GitHub issue 2)
-- Tests: Caps Lock locks on and off, with its light
+- Fixed: a gamepad's X button typed Space, and Y Return, so a pad whose
+  fire button reports as X sent a key to a game waiting for one (as BMCoco
+  0.5.6 fixed). X is now button 0 as A is (button 2 on the second gamepad),
+  and Y button 1 as B is; `pad_keys=1` in `cmdline.txt` brings back Space
+  and Return
+- Tests: Caps Lock locks on and off, with its light;
+  the gamepad's X with and without `pad_keys`
 
 ## 0.4.3 – 2026-11-09
 

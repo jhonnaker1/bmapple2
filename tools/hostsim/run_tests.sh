@@ -213,10 +213,19 @@ if [ "$caps" = "0 1 0 " ] && grep -q "frame 13[0-9]: Caps Lock light on" "$OUT/c
 else
     fail capslock "Caps Lock in \$C025 went $caps (expected 0 1 0), or the light didn't follow (see out/capslock/log.txt)"
 fi
-# Gamepad X is Space.
-run padkeys 60 "$TESTROMS" "" '120 pad 0 0\n125 shot idle.ppm\n130 pad 0 0x0004\n140 shot x.ppm\n141 pad 0 0\n150 shot idle2.ppm\n151 quit\n'
+# Gamepad X is button 0, as A is, typing nothing; Y button 1. With
+# pad_keys=1, X types Space and is no button.
+# The stand-in ROM shows the buttons: X's screen must be A's (button 0,
+# no key typed).
+padx_script='120 pad 0 0\n125 shot idle.ppm\n130 pad 0 0x0004\n135 buttons\n140 shot x.ppm\n141 pad 0 0x0008\n145 buttons\n146 pad 0 0\n150 shot idle2.ppm\n160 pad 0 0x0001\n170 shot a.ppm\n171 pad 0 0\n172 quit\n'
+run padx 60 "$TESTROMS" "" "$padx_script"
+same padx a x
+check_log padx "frame 135: buttons 1$" "X is button 0"
+check_log padx "frame 145: buttons 2$" "Y is button 1"
+run padkeys 60 "$TESTROMS" "pad_keys=1" "$padx_script"
 differ padkeys idle x
 same padkeys idle idle2
+check_log padkeys "frame 135: buttons 0$" "with pad_keys=1, X types Space and is no button"
 
 echo "Joysticks: analog stick, D-pad, GPIO"
 # Full left on the stick, the D-pad and a GPIO joystick all read paddle 0

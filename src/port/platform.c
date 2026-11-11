@@ -833,7 +833,18 @@ static int open_menu;
 static int pad_last_menu[HOST_PADS];
 static int pad_last_keys[HOST_PADS];
 
-/* Gamepad buttons that are keys, as in BMCoco: X is Space, Y is Return. */
+/* With pad_keys=1, gamepad buttons that are keys: X is Space, Y is Return.
+   Otherwise X and Y are buttons, as A and B (joystick.c): pads report their
+   buttons in many orders, and a key typed by a game's fire button can be
+   taken for an answer (BMCoco 0.5.6). */
+int bmapple2_pad_keys(void)
+{
+	static int pad_keys = -1;
+	if (pad_keys < 0)
+		pad_keys = host_option_int("pad_keys", 0) != 0;
+	return pad_keys;
+}
+
 static const struct {
 	int bit;
 	int adb;
@@ -902,8 +913,8 @@ static void process_input(void)
 		pad_last_menu[pad] = menu;
 	}
 
-	/* X and Y, from any gamepad. */
-	for (pad = 0; pad < HOST_PADS; pad++) {
+	/* X and Y, from any gamepad, with pad_keys=1. */
+	for (pad = 0; pad < HOST_PADS && bmapple2_pad_keys(); pad++) {
 		int state = host_pad_state(pad);
 		unsigned k;
 		if (state < 0)

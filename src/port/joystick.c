@@ -72,15 +72,19 @@ static int pad_buttons(void)
 {
 	int buttons = 0;
 	int pad0 = host_pad_state(0), pad1 = host_pad_state(1);
+	/* X is a button as A is, and Y as B (unless pad_keys=1 has them type
+	   keys). */
+	int a = HOST_PAD_A | (bmapple2_pad_keys() ? 0 : HOST_PAD_X);
+	int b = HOST_PAD_B | (bmapple2_pad_keys() ? 0 : HOST_PAD_Y);
 	if (pad0 < 0)
 		pad0 = 0;
 	if (pad1 < 0)
 		pad1 = 0;
-	if ((pad0 & HOST_PAD_A) || (host_gpio_joystick(0) & HOST_JOY_FIRE))
+	if ((pad0 & a) || (host_gpio_joystick(0) & HOST_JOY_FIRE))
 		buttons |= 1;
-	if (pad0 & HOST_PAD_B)
+	if (pad0 & b)
 		buttons |= 2;
-	if ((pad1 & HOST_PAD_A) || (host_gpio_joystick(1) & HOST_JOY_FIRE))
+	if ((pad1 & a) || (host_gpio_joystick(1) & HOST_JOY_FIRE))
 		buttons |= 4;
 	return buttons;
 }
