@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.4 – unreleased
+## 0.4.4 – 2026-11-11
 
 - Fixed: Caps Lock didn't stay on: capitals needed Shift held, and games
   that want a capital (Alien Typhoon fires with A) didn't take the key. The
