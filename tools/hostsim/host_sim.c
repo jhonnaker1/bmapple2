@@ -349,6 +349,11 @@ int host_key_event(int *usage, int *pressed)
 
 int host_key_down(int usage) { return key_state[usage & 0xff]; }
 
+void host_keyboard_caps_light(int on)
+{
+	fprintf(stderr, "[sim] frame %ld: Caps Lock light %s\n", frame, on ? "on" : "off");
+}
+
 unsigned host_key_modifiers(void)
 {
 	unsigned m = 0;
@@ -522,6 +527,10 @@ static void run_script(void)
 			        frame, snd_written, snd_writes, snd_min_fill, snd_max_fill, snd_underruns,
 			        snd_nonzero);
 			fprintf(stderr, "[sim] frame %ld: %ld frames presented\n", frame, presents);
+		} else if (strcmp(cmd, "c025") == 0) {
+			/* KEGS's keyboard modifiers ($C025): bit 2 Caps Lock. */
+			extern unsigned int g_c025_val;   /* KEGS's word32 */
+			fprintf(stderr, "[sim] frame %ld: c025 %02x\n", frame, (unsigned) g_c025_val);
 		} else if (strcmp(cmd, "quit") == 0) {
 			fprintf(stderr, "[sim] quit at frame %ld (%.2f s)\n", frame, now);
 			exit(0);

@@ -149,6 +149,7 @@ CKernel::CKernel(void)
   s_pThis = this;
   for (unsigned i = 0; i < MAX_KEYBOARDS; i++) {
     m_pKeyboard[i] = 0;
+    m_CapsLightSet[i] = -1;
     m_KeyboardIndex[i] = i;
     m_KeyboardModifiers[i] = 0;
     memset(m_KeyboardKeys[i], 0, sizeof m_KeyboardKeys[i]);
@@ -301,6 +302,21 @@ void CKernel::UpdateUSBPlugAndPlay(void) {
     SetupUSBGamePads();
     SetupUSBMouse();
   }
+  UpdateKeyboardLights();
+}
+
+// The Caps Lock light, on each keyboard whose light isn't as wanted (a
+// keyboard just plugged in too). SetLEDs() sends a USB request, which must
+// not be made from an interrupt: this runs in core 0's loop, or the Pi
+// Zero's USB task.
+void CKernel::UpdateKeyboardLights(void) {
+  int wanted = m_CapsLightWanted;
+  for (unsigned i = 0; i < MAX_KEYBOARDS; i++) {
+    if (m_pKeyboard[i] != 0 && m_CapsLightSet[i] != wanted) {
+      m_pKeyboard[i]->SetLEDs(wanted ? LED_CAPS_LOCK : 0);
+      m_CapsLightSet[i] = wanted;
+    }
+  }
 }
 
 TShutdownMode CKernel::Run(void) {
@@ -423,6 +439,7 @@ void CKernel::SetupUSBKeyboards(void) {
     m_pKeyboard[i] =
         (CUSBKeyboardDevice *)mDeviceNameService.GetDevice(name, FALSE);
     if (m_pKeyboard[i] != 0) {
+      m_CapsLightSet[i] = -1;
       m_pKeyboard[i]->RegisterRemovedHandler(KeyboardRemovedHandler,
                                              &m_KeyboardIndex[i]);
       m_pKeyboard[i]->RegisterKeyStatusHandlerRaw(KeyStatusHandlerRaw, FALSE,
@@ -1193,6 +1210,8 @@ int host_key_event(int *usage, int *pressed) {
 }
 
 int host_key_down(int usage) { return CKernel::Get()->KeyDown(usage); }
+
+void host_keyboard_caps_light(int on) { CKernel::Get()->SetCapsLight(on); }
 
 unsigned host_key_modifiers(void) { return CKernel::Get()->KeyModifiers(); }
 

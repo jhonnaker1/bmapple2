@@ -67,6 +67,9 @@ void host_sound_write(const int16_t *samples, unsigned frames);
 int host_key_event(int *usage, int *pressed);
 /* Is the key with this USB HID usage code down? */
 int host_key_down(int usage);
+/* Lights (or puts out) the Caps Lock light of every USB keyboard, those
+   plugged in later too. */
+void host_keyboard_caps_light(int on);
 /* USB HID modifier byte (bit 0 left ctrl ... bit 7 right GUI). */
 unsigned host_key_modifiers(void);
 

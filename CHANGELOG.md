@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.4.4 – unreleased
+
+- Fixed: Caps Lock didn't stay on: capitals needed Shift held, and games
+  that want a capital (Alien Typhoon fires with A) didn't take the key. The
+  Apple's Caps Lock locks down, a PC's springs back; each press now turns
+  it on or off, as in KEGS's Windows version, with the keyboard's Caps
+  Lock light showing which (GitHub issue 2)
+- Tests: Caps Lock locks on and off, with its light
+
 ## 0.4.3 – 2026-11-09
 
 - Fixed: BMApple2 never started on a Raspberry Pi: a black screen, and no

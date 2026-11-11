@@ -198,6 +198,21 @@ echo "Keyboard"
 run keys 60 "$TESTROMS" "" '120 shot idle.ppm\n130 key 0x04 1\n140 shot a.ppm\n141 key 0x04 0\n150 shot idle2.ppm\n151 quit\n'
 differ keys idle a
 same keys idle idle2
+# Caps Lock locks, as the Apple's key does: pressed and let go, it stays
+# down for KEGS ($C025 bit 2) with the keyboard's light on; pressed and let
+# go again, it's up and the light off.
+run capslock 60 "$TESTROMS" "" '120 c025\n130 key 0x39 1\n135 key 0x39 0\n140 c025\n150 key 0x39 1\n155 key 0x39 0\n160 c025\n161 quit\n'
+# Bit 2 of each reading (bit 5 is the IIgs's "modifier changed" latch).
+caps=""
+for v in $(grep "c025" "$OUT/capslock/log.txt" | awk '{print $NF}'); do
+    caps="$caps$(( (0x$v >> 2) & 1 )) "
+done
+if [ "$caps" = "0 1 0 " ] && grep -q "frame 13[0-9]: Caps Lock light on" "$OUT/capslock/log.txt" \
+   && grep -q "frame 15[0-9]: Caps Lock light off" "$OUT/capslock/log.txt"; then
+    pass "capslock: a press locks it on (light on), the next lets it up (light off)"
+else
+    fail capslock "Caps Lock in \$C025 went $caps (expected 0 1 0), or the light didn't follow (see out/capslock/log.txt)"
+fi
 # Gamepad X is Space.
 run padkeys 60 "$TESTROMS" "" '120 pad 0 0\n125 shot idle.ppm\n130 pad 0 0x0004\n140 shot x.ppm\n141 pad 0 0\n150 shot idle2.ppm\n151 quit\n'
 differ padkeys idle x

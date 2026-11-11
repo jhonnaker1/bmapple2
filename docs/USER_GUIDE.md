@@ -114,6 +114,7 @@ the next boot. KEGS keeps its own in `config.kegs`.
 | Shift+F6, F7           | KEGS's debugger (not useful without a host terminal) |
 | F9                     | Swap or invert the joystick's axes (with Shift, without) |
 | Pause                  | F15                                           |
+| Caps Lock              | Caps Lock, which locks as the Apple's does: press it once for capitals (the keyboard's Caps Lock light comes on), again to let it go |
 | Insert                 | Help                                          |
 
 The other keys are where they are on an Apple keyboard. The IIgs reads the

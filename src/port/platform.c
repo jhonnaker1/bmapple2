@@ -842,6 +842,11 @@ static const struct {
 	{HOST_PAD_Y, 0x24},
 };
 
+/* Caps Lock: the Apple's key locks down (pressed once it stays down, the
+   next press lets it up), a PC's springs back, so each press turns it on
+   or off, as KEGS's Windows version does, with the keyboard's light. */
+static int caps_lock;
+
 static void process_input(void)
 {
 	int usage, pressed, pad, dx, dy, buttons;
@@ -857,6 +862,14 @@ static void process_input(void)
 		if (usage == KEY_MENU) {
 			if (pressed)
 				open_menu = TRUE;
+			continue;
+		}
+		if (usage == USAGE_CAPS_LOCK) {
+			if (pressed) {
+				caps_lock = !caps_lock;
+				adb_physical_key_update(main_kimage, 0x39, 0, !caps_lock);
+				host_keyboard_caps_light(caps_lock);
+			}
 			continue;
 		}
 		adb = bmapple2_usage_to_adb(usage);

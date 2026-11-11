@@ -136,6 +136,10 @@ public:
 
 private:
   void SetupUSBKeyboards(void);
+  void UpdateKeyboardLights(void);
+public:
+  void SetCapsLight(int on) { m_CapsLightWanted = on ? 1 : 0; }
+private:
   void SetupUSBGamePads(void);
   void SetupUSBMouse(void);
   void SetupGPIOJoysticks(void);
@@ -200,6 +204,11 @@ private:
   // Keyboards. Each reports its own set of pressed keys; the emulator sees
   // the union of all of them.
   CUSBKeyboardDevice *m_pKeyboard[MAX_KEYBOARDS];
+  // The Caps Lock light: asked for by the emulator (on core 1, or the Pi
+  // Zero's one core), set on the keyboards by UpdateUSBPlugAndPlay(), which
+  // runs where USB requests may be made. -1: not set yet.
+  volatile int m_CapsLightWanted = 0;
+  int m_CapsLightSet[MAX_KEYBOARDS];
   unsigned m_KeyboardIndex[MAX_KEYBOARDS];
   unsigned char m_KeyboardModifiers[MAX_KEYBOARDS];
   unsigned char m_KeyboardKeys[MAX_KEYBOARDS][6];
