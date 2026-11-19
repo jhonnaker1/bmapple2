@@ -17,11 +17,13 @@
 //
 // From BMC64's src/sdcard/sd_fs.h, unchanged.
 //
-// Modified for BMApple2.
+// Modified for BMApple2. Paths may name a volume (a USB stick), and
+// sd_path_space_kb(), from BMA800XL.
 //
 // File access on the SD card, for the code from BMC64: the web UI, the log
 // file and the Wi-Fi checks. Paths are absolute on the card
-// ("/bmapple2.cfg"); the card's volume is added here.
+// ("/bmapple2.cfg"); the card's volume is added here. A path that names its
+// own volume ("USB:/disks/x.po", a USB stick) is used as it is.
 //
 // sd_fs_fatfs.c implements this on the Pi with FatFs; tools/sdcard/
 // sd_fs_posix.c implements it on a folder of a PC for the tests.
@@ -114,6 +116,8 @@ int sd_remove_tree(const char *path, unsigned *removed,
 
 // The card's size and free space, in KB.
 int sd_space_kb(uint32_t *total_kb, uint32_t *free_kb);
+// The same for the volume holding PATH ("/" the card, "USB:/" a stick).
+int sd_path_space_kb(const char *path, uint32_t *total_kb, uint32_t *free_kb);
 
 // ---- Shorter forms (sd_fs_file.c) ----
 

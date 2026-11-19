@@ -2,6 +2,11 @@
 
 ## 0.4.5 – unreleased
 
+- USB sticks, from BMA800XL: up to three FAT sticks, as USB:, USB2: and
+  USB3:. KEGS's file browser (F4) shows each as a folder in the card's
+  top folder while it is in, and the web UI's Files page has a button for
+  each. Pulling a stick out ejects the disks loaded from it; config.kegs
+  keeps them for the next boot
 - Pi 5: the fan is run by the SoC's temperature (off below 50 °C, faster
   in four steps up to 75 °C), as on Raspberry Pi OS; before it stayed off
   (from BMA800XL 1.4.3, after BMC64)

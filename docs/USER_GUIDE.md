@@ -74,6 +74,21 @@ the one that starts), and restarts the machine. For a 5.25" disk on a IIgs
 it sets the startup slot to 6 for that start, and back to what it was once
 the disk has started.
 
+## USB sticks
+
+Disk images can also be on USB sticks (FAT32 or FAT16, up to three). While
+one is plugged in, the card's top folder in KEGS's file browser (F4) has a
+folder for it: **USB:** for the first stick plugged in, then **USB2:** and
+**USB3:**. Go into it to choose an image on the stick; **..** at its top
+goes back to the card. A stick plugged in while the browser shows the
+card's top folder appears once the folder is opened again.
+
+Pulling a stick out ejects the disks loaded from it. What the Apple writes
+to a disk reaches the stick within a second, as on the card, so wait that
+long after the drive stops before pulling it out. `config.kegs` keeps the
+ejected disks, so they are loaded again at the next boot if the stick is
+in.
+
 ## The menus
 
 **F4** opens KEGS's own settings: disks, the ROM, the speed, the joystick,
@@ -236,8 +251,9 @@ The web UI has:
   Down** (the Pi halts; switch it off, then on again to restart; a Pi 400
   switches itself off, and its power key starts it again), and **Disable
   Web UI** until the next reboot.
-- **Files**: browse the SD card; upload (or drag and drop) files into a
-  folder, download, rename, delete, and create folders. Clicking a disk
+- **Files**: browse the SD card and USB sticks (a button for each drive
+  while a stick is plugged in; reload the page after plugging one in);
+  upload (or drag and drop) files into a folder, download, rename, delete, and create folders. Clicking a disk
   image **starts it** (see Disks). `cmdline.txt`, `config.txt`,
   `bmapple2.cfg`, `config.kegs` and `wpa_supplicant.conf` can be **edited**
   in the browser; changes take effect after a reboot, and the previous

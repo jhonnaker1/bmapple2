@@ -29,6 +29,7 @@ it available; see the [third-party](docs/THIRD_PARTY.md) acknowledgements.
   stick gives the full paddle range); real joysticks wired to the GPIO header
 - No shutdown needed: just switch it off (disk images are written as the
   emulated machine writes them, and pushed out to the card every second)
+- Disk images on the SD card or on up to three USB sticks
 - KEGS's own settings (F4) for disks, speed and the rest, and a menu (F10):
   the machine, a colour or monochrome monitor (white, green or amber), the
   volume, video, sound and network
@@ -135,6 +136,7 @@ src/port/snddrv.c          KEGS's sound output
 src/port/joystick.c        Gamepads and GPIO joysticks as the Apple II's joystick
 src/port/keymap.c          USB keys to Apple Desktop Bus key codes
 src/port/menu.c, osd.c     The menu, drawn in the Apple II's font
+src/port/usbsticks.c       USB sticks in KEGS's file browser (with fswrap.c)
 src/port/kegs.mk           KEGS's source list
 third_party/kegs           KEGS (submodule)
 third_party/circle-stdlib  Circle and newlib (submodule)

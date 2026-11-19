@@ -8,6 +8,7 @@
 #ifndef BMAPPLE2_PORT_H_
 #define BMAPPLE2_PORT_H_
 
+#include <stddef.h>
 #include <stdint.h>
 
 #ifndef TRUE
@@ -55,6 +56,21 @@ int bmapple2_disk_activity(void);
 void bmapple2_set_disk_activity(int on);
 /* The display's resolution setting changed (the Pi 5). */
 void bmapple2_display_mode_changed(void);
+
+/* usbsticks.c: the USB sticks as the folders USB:, USB2: and USB3: in the
+   card's top folder. bmapple2_usb_path() writes the stick's own path for
+   one in those folders ("/USB:/x.po" is "USB:/x.po") and returns the
+   stick (0-2), or -1 for a path that isn't in them;
+   bmapple2_usb_stick_of() is the stick a disk's path is on, or -1;
+   bmapple2_usb_is_card_root() is whether a folder is the card's top one;
+   bmapple2_usb_folder(i) the folder of the i-th stick plugged in, or NULL.
+   bmapple2_check_usb_sticks(), once a second, ejects the disks on a stick
+   pulled out. */
+int bmapple2_usb_path(const char *path, char *out, size_t size);
+int bmapple2_usb_stick_of(const char *path);
+int bmapple2_usb_is_card_root(const char *path);
+const char *bmapple2_usb_folder(int i);
+void bmapple2_check_usb_sticks(void);
 /* The machines, the one running (-1 if there is no ROM), and choosing
    another (its ROM is loaded and it starts; kept in bmapple2.cfg). */
 enum { BMAPPLE2_IIGS3, BMAPPLE2_IIGS1, BMAPPLE2_IIE, BMAPPLE2_MACHINES };

@@ -322,6 +322,33 @@ check_log start "starting .*hard\.hdv from slot 7" "a hard disk goes in slot 7"
 check_log start "starting .*disk35\.woz from slot 5" "a 3.5\" WOZ disk goes in slot 5"
 check_log start "Inserting disk .*hard\.hdv.* in slot 7" "KEGS mounts it"
 
+echo "USB sticks"
+# Stick 1 is the folder usb/. KEGS's file browser lists it as the folder
+# USB: in the card's top folder while it is in (fswrap.c, as on the Pi), and
+# /USB:/x is the stick's x. A hard disk on the stick and a 5.25" disk on
+# the card, from config.kegs: pulling the stick out ejects the first only,
+# and config.kegs keeps both for the next boot.
+mkdir -p "$OUT/usbsticks/usb/games" "$OUT/usbsticks/disks"
+head -c 4194304 /dev/zero > "$OUT/usbsticks/usb/hard.hdv"
+head -c 143360 /dev/zero > "$OUT/usbsticks/disks/game.dsk"
+printf 's6d1 = disks/game.dsk\ns7d1 = usb/hard.hdv\n' > "$OUT/usbsticks/config.kegs"
+BMAPPLE2_USB=1 run usbsticks 60 "$TESTROMS" "" '100 ls .\n101 stat ./USB:\n102 stat ./USB:/hard.hdv\n103 ls ./USB:/\n104 stat ./USB2:\n300 usb 1 0\n360 ls .\n361 stat ./USB:\n400 quit\n'
+check_log usbsticks "ls \.:.* disks.* USB:$" "the card's top folder lists the stick as USB:"
+check_log usbsticks "stat \./USB:: dir" "USB: is a folder"
+check_log usbsticks "stat \./USB:/hard\.hdv: file" "and /USB:/hard.hdv the stick's file"
+check_log usbsticks "ls \./USB:/:.* games" "USB: lists the stick's files"
+check_log usbsticks "stat \./USB2:: missing" "USB2:, with no second stick, isn't there"
+check_log usbsticks "Inserting disk .*hard\.hdv.* in slot 7" "a hard disk on the stick is mounted"
+check_log usbsticks "Ejecting dsk: usb/hard\\.hdv" "pulling the stick out ejects its disk"
+check_log usbsticks "USB stick USB: removed: 1 ejected" "and not the card's"
+check_log usbsticks "frame 360: ls \.: [^U]*$" "and USB: is gone from the listing"
+check_log usbsticks "frame 361: stat \./USB:: missing" "and from stat()"
+if grep -q "^s7d1 = usb/hard.hdv" "$OUT/usbsticks/config.kegs" 2>/dev/null; then
+    pass "usbsticks: config.kegs keeps the stick's disk for the next boot"
+else
+    fail usbsticks "the stick's disk was taken out of config.kegs"
+fi
+
 echo "ROMs made from MAME's ROM chips"
 # Stand-in chips: the IIgs ROM 3's 341-0728 and 341-0748 (each half of the
 # second marked), and the IIe's three. Only the arrangement is checked.

@@ -35,7 +35,7 @@ OBJS = src/main.o src/kernel.o src/logging.o src/options.o \
        src/port/platform.o src/port/keymap.o src/port/joystick.o \
        src/port/snddrv.o src/port/menu.o src/port/osd.o \
        src/port/scc_stub.o src/port/scc_socket_driver.o src/port/posix_extra.o \
-       src/port/fswrap.o \
+       src/port/fswrap.o src/port/usbsticks.o \
        src/network.o src/network_time_sync.o \
        src/webui/webui.o src/webui/webui_http.o src/webui/webui_fs.o \
        src/webui/webui_machine.o src/webui/webui_assets.o \
@@ -72,7 +72,8 @@ include $(CIRCLEHOME)/Rules.mk
 INCLUDE := $(CIRCLE_STDLIB_INCLUDES) $(INCLUDE) -I $(CIRCLEHOME)/addon/fatfs
 
 # See src/port/fswrap.c
-LDFLAGS += --wrap=stat
+LDFLAGS += --wrap=stat --wrap=lstat --wrap=open --wrap=fopen --wrap=opendir \
+           --wrap=readdir --wrap=closedir --wrap=unlink --wrap=rename --wrap=mkdir
 
 VERSION_DEFINES = -DBMAPPLE2_VERSION=\"$(BMAPPLE2_VERSION)\" \
                   -DBMAPPLE2_GIT=\"$(BMAPPLE2_GIT)\" -DKEGS_VERSION=\"$(KEGS_VERSION)\"
