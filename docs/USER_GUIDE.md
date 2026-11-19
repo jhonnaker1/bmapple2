@@ -271,9 +271,10 @@ The web UI is open to anyone on your network. To protect it with a PIN, set
 (anything) and the PIN. To network without the web UI, set `webui=0`.
 
 The network also sets the Pi's clock, so files saved on the card get the
-right date and time. Set `timezone` to your offset from UTC in minutes, for
-example `timezone=600` for UTC+10. (The IIgs keeps its own clock, set in
-its Control Panel.)
+right date and time. Choose your time zone in the menu (Network, *Time
+Zone*), or set `timezone` to your offset from UTC in minutes, for example
+`timezone=600` for UTC+10 or `timezone=330` for UTC+5:30. (The IIgs keeps
+its own clock, set in its Control Panel.)
 
 ### Calling BBSes: the virtual modem
 

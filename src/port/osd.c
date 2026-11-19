@@ -1,5 +1,5 @@
 /*
- * osd.c - BMApple2's on-screen display: menus, file browser, text entry.
+ * osd.c - BMApple2's on-screen display: menus, messages, text entry.
  *
  * From BMCoco. Text is drawn with the Apple II character set (KEGS's
  * kegsfont.h, the Apple IIe's character ROM), each 8x8 character doubled to
@@ -11,12 +11,9 @@
  */
 
 #include <ctype.h>
-#include <dirent.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <strings.h>
-#include <sys/stat.h>
 
 #include "../host.h"
 #include "bmapple2.h"
@@ -655,187 +652,6 @@ int osd_confirm(const char *title, const char *question)
 	};
 	int sel = 3;
 	return osd_menu(title, items, 4, &sel) == 1;
-}
-
-/* ---- File browser ------------------------------------------------------------- */
-
-struct entry {
-	char *name;
-	int is_dir;
-};
-
-static int compare_entries(const void *a, const void *b)
-{
-	const struct entry *ea = a, *eb = b;
-	if (ea->is_dir != eb->is_dir)
-		return eb->is_dir - ea->is_dir;
-	return strcasecmp(ea->name, eb->name);
-}
-
-static int has_ext(const char *name, const char *const exts[])
-{
-	const char *dot = strrchr(name, '.');
-	int i;
-	if (exts == NULL)
-		return TRUE;
-	if (dot == NULL)
-		return FALSE;
-	for (i = 0; exts[i] != NULL; i++)
-		if (strcasecmp(dot + 1, exts[i]) == 0)
-			return TRUE;
-	return FALSE;
-}
-
-static void join_path(char *out, size_t size, const char *dir, const char *name)
-{
-	size_t len = strlen(dir);
-	if (len > 0 && dir[len - 1] == '/')
-		snprintf(out, size, "%s%s", dir, name);
-	else
-		snprintf(out, size, "%s/%s", dir, name);
-}
-
-static void parent_dir(char *dir)
-{
-	char *slash;
-	size_t len = strlen(dir);
-	while (len > 1 && dir[len - 1] == '/')
-		dir[--len] = '\0';
-	slash = strrchr(dir, '/');
-	if (slash == NULL)
-		strcpy(dir, "/");
-	else if (slash == dir)
-		dir[1] = '\0';
-	else
-		*slash = '\0';
-}
-
-/* Reads DIR into a sorted list; returns how many entries, or -1. */
-static int read_dir(const char *dir, const char *const exts[], struct entry **out)
-{
-	DIR *d = opendir(dir);
-	struct dirent *de;
-	struct entry *list = NULL;
-	int n = 0, cap = 0;
-	if (d == NULL)
-		return -1;
-	while ((de = readdir(d)) != NULL) {
-		char path[512];
-		struct stat st;
-		int is_dir;
-		if (de->d_name[0] == '.')
-			continue;
-		join_path(path, sizeof(path), dir, de->d_name);
-		is_dir = stat(path, &st) == 0 && S_ISDIR(st.st_mode);
-		if (!is_dir && !has_ext(de->d_name, exts))
-			continue;
-		if (n == cap) {
-			struct entry *bigger;
-			cap = cap ? cap * 2 : 64;
-			bigger = realloc(list, cap * sizeof(*list));
-			if (bigger == NULL)
-				break;
-			list = bigger;
-		}
-		list[n].name = strdup(de->d_name);
-		list[n].is_dir = is_dir;
-		if (list[n].name == NULL)
-			break;
-		n++;
-	}
-	closedir(d);
-	qsort(list, n, sizeof(*list), compare_entries);
-	*out = list;
-	return n;
-}
-
-static void free_entries(struct entry *list, int n)
-{
-	int i;
-	for (i = 0; i < n; i++)
-		free(list[i].name);
-	free(list);
-}
-
-int osd_browse(const char *title, char *dir, size_t dir_size,
-               const char *const exts[], char *path, size_t path_size)
-{
-	char came_from[256] = "";
-
-	for (;;) {
-		struct entry *list = NULL;
-		struct osd_item *items;
-		char heading[OSD_COLS * 2];
-		int n = read_dir(dir, exts, &list);
-		int i, sel = 1, chosen;
-
-		if (n < 0) {
-			if (strcmp(dir, "/") != 0) {
-				/* Gone (the card changed): start again at the top. */
-				snprintf(dir, dir_size, "/");
-				continue;
-			}
-			osd_message("Cannot read the SD card.", TRUE);
-			return 0;
-		}
-
-		/* The directory, then "..", then the entries. */
-		items = calloc(n + 2, sizeof(*items));
-		if (items == NULL) {
-			free_entries(list, n);
-			return 0;
-		}
-		snprintf(heading, sizeof(heading), "%s", dir);
-		items[0].text = heading;
-		items[0].flags = OSD_ITEM_LABEL;
-		items[0].id = -2;
-		items[1].text = "..";
-		items[1].value = "<DIR>";
-		items[1].id = -3;
-		for (i = 0; i < n; i++) {
-			items[i + 2].text = list[i].name;
-			items[i + 2].value = list[i].is_dir ? "<DIR>" : NULL;
-			items[i + 2].id = i;
-			if (came_from[0] != '\0' && strcmp(list[i].name, came_from) == 0)
-				sel = i + 2;
-		}
-		if (n > 0 && came_from[0] == '\0')
-			sel = 2;
-
-		chosen = osd_menu(title, items, n + 2, &sel);
-		free(items);
-
-		if (chosen == -1) {
-			free_entries(list, n);
-			return 0;
-		}
-		if (chosen == -3) {
-			char *slash;
-			size_t len = strlen(dir);
-			if (strcmp(dir, "/") == 0) {
-				free_entries(list, n);
-				continue;
-			}
-			while (len > 1 && dir[len - 1] == '/')
-				dir[--len] = '\0';
-			slash = strrchr(dir, '/');
-			snprintf(came_from, sizeof(came_from), "%s", slash ? slash + 1 : "");
-			parent_dir(dir);
-			free_entries(list, n);
-			continue;
-		}
-		if (list[chosen].is_dir) {
-			char next[512];
-			join_path(next, sizeof(next), dir, list[chosen].name);
-			snprintf(dir, dir_size, "%s", next);
-			came_from[0] = '\0';
-			free_entries(list, n);
-			continue;
-		}
-		join_path(path, path_size, dir, list[chosen].name);
-		free_entries(list, n);
-		return 1;
-	}
 }
 
 /* ---- Notifications ------------------------------------------------------------ */

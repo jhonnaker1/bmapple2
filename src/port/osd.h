@@ -1,5 +1,5 @@
 /*
- * osd.h - BMApple2's on-screen display: menus, file browser, text entry.
+ * osd.h - BMApple2's on-screen display: menus, messages, text entry.
  *
  * BMApple2's own menu (network, sound, video, power) is drawn straight into
  * the emulator's frame buffer, in the style of an Apple II text screen.
@@ -83,11 +83,6 @@ void osd_message(const char *text, int wait);
 void osd_info(const char *title, const char *text);
 /* Asks a yes/no question; returns 1 for yes. */
 int osd_confirm(const char *title, const char *question);
-/* Lets a file be chosen, starting in DIR (updated to the directory the file
-   was in). Only files with one of EXTS (NULL-terminated, lower case, no dot)
-   are listed; NULL lists everything. Returns 1 with the path in PATH. */
-int osd_browse(const char *title, char *dir, size_t dir_size,
-               const char *const exts[], char *path, size_t path_size);
 
 /* Draws a one line message over the emulator's picture, for a few seconds. */
 void osd_notify(const char *text);

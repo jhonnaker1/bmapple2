@@ -601,6 +601,9 @@ static void handle_requests(void)
 		request_power = -1;
 		printf("%s\n", power_off ? "Shutting down" : "Rebooting");
 		sync_files();
+		/* Tell the far end (the modem's BBS) the connection is over; a
+		   reboot alone would leave it waiting. */
+		host_tcp_close_all();
 		if (power_off)
 			host_power_off();
 		else
@@ -1048,6 +1051,14 @@ void bmapple2_main(void)
 		printf("BMApple2: KEGS's picture is %d wide, expected %d\n",
 		       main_kimage->a2_width_full, FB_W);
 	kegs_pixels = calloc((size_t) FB_W * kegs_height, sizeof(*kegs_pixels));
+	if (kegs_pixels == NULL) {
+		osd_open();
+		osd_message("Not enough memory for the picture.", FALSE);
+		for (;;) {
+			bmapple2_idle();
+			host_video_present(TRUE);
+		}
+	}
 
 	last_second = host_time();
 	for (;;) {

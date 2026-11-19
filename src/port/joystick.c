@@ -100,8 +100,8 @@ void joystick_update(dword64 dfcyc)
 		g_paddle_val[pad * 2] = axis(pad, 0, state, gpio);
 		g_paddle_val[pad * 2 + 1] = axis(pad, 1, state, gpio);
 	}
-	/* Bits 2 and 3 high: as KEGS's own drivers do with no third or
-	   fourth button. */
+	/* Bits 0 to 2 are the buttons (pad_buttons()); bit 3 high, as KEGS's
+	   own drivers have it with no fourth button. */
 	g_paddle_buttons = 0x8 | pad_buttons();
 	paddle_update_trigger_dcycs(dfcyc);
 }

@@ -390,6 +390,81 @@ else
     fail settings "crt_shader=1 not in bmapple2.cfg"
 fi
 
+echo "Wi-Fi settings keep the key"
+# wpa_supplicant.conf with a key worked out from the password (64 hex
+# digits, not in quotes), then one with a password that has a " in it.
+# Menu, Network (six down), Wi-Fi Country (four down), Return twice: the
+# country is saved again, and the key must be written back as it was.
+wifi_keys() {
+    local f=120 k script=""
+    for k in F10 DOWN DOWN DOWN DOWN DOWN DOWN ENTER DOWN DOWN DOWN DOWN ENTER ENTER; do
+        eval "k=\$$k"
+        script="$script$f key $k 1\n$((f + 1)) key $k 0\n"
+        f=$((f + 10))
+    done
+    printf '%s' "${script}400 quit\n"
+}
+HEXKEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+mkdir -p "$OUT/wifihex" "$OUT/wifiquote"
+printf '# original\ncountry=GB\n\nnetwork={\n\tssid="home"\n\tpsk=%s\n\tkey_mgmt=WPA-PSK\n}\n' "$HEXKEY" > "$OUT/wifihex/wpa_supplicant.conf"
+printf '# original\ncountry=GB\n\nnetwork={\n\tssid="home"\n\tpsk="say "hi" 123"\n\tkey_mgmt=WPA-PSK\n}\n' > "$OUT/wifiquote/wpa_supplicant.conf"
+run wifihex 60 "$TESTROMS" "" "$(wifi_keys)"
+run wifiquote 60 "$TESTROMS" "" "$(wifi_keys)"
+for name in wifihex wifiquote; do
+    if grep -q '^# original' "$OUT/$name/wpa_supplicant.conf"; then
+        fail $name "wpa_supplicant.conf wasn't written again (the menu keys missed)"
+    fi
+done
+if grep -q "^	psk=$HEXKEY\$" "$OUT/wifihex/wpa_supplicant.conf" && \
+   grep -q '^country=GB' "$OUT/wifihex/wpa_supplicant.conf"; then
+    pass "wifihex: a 64-digit key is written back whole, without quotes"
+else
+    fail wifihex "the key was changed (see out/wifihex/wpa_supplicant.conf)"
+fi
+if grep -q '^	psk="say "hi" 123"$' "$OUT/wifiquote/wpa_supplicant.conf"; then
+    pass "wifiquote: a password with a \" in it is written back whole"
+else
+    fail wifiquote "the password was changed (see out/wifiquote/wpa_supplicant.conf)"
+fi
+
+echo "Esc in the Machine menu goes back to the menu"
+# Menu, Machine (three down), Esc, then Video (one down) and its CRT
+# Effect (three down): saved only if the menu stayed open.
+esc_keys() {
+    local f=120 k script=""
+    for k in F10 DOWN DOWN DOWN ENTER ESC DOWN ENTER DOWN DOWN DOWN ENTER; do
+        eval "k=\$$k"
+        script="$script$f key $k 1\n$((f + 1)) key $k 0\n"
+        f=$((f + 10))
+    done
+    printf '%s' "${script}400 quit\n"
+}
+ESC=0x29 run machineesc 60 "$TESTROMS" "" "$(ESC=0x29 esc_keys)"
+if grep -q "^crt_shader=1" "$OUT/machineesc/bmapple2.cfg" 2>/dev/null; then
+    pass "machineesc: the menu stays open"
+else
+    fail machineesc "the menu closed (crt_shader=1 not in bmapple2.cfg)"
+fi
+
+echo "Time zones a half or three quarters of an hour off"
+# timezone=330 (India): Menu, Network, Time Zone (seven down from Network),
+# Return; the list opens at UTC+5:30, so one down and Return is UTC+5:45.
+tz_keys() {
+    local f=120 k script=""
+    for k in F10 DOWN DOWN DOWN DOWN DOWN DOWN ENTER DOWN DOWN DOWN DOWN DOWN DOWN DOWN ENTER DOWN ENTER; do
+        eval "k=\$$k"
+        script="$script$f key $k 1\n$((f + 1)) key $k 0\n"
+        f=$((f + 10))
+    done
+    printf '%s' "${script}400 quit\n"
+}
+run timezone 60 "$TESTROMS" "timezone=330" "$(tz_keys)"
+if grep -q "^timezone=345" "$OUT/timezone/bmapple2.cfg" 2>/dev/null; then
+    pass "timezone: UTC+5:30 is in the list, and UTC+5:45 after it"
+else
+    fail timezone "timezone=345 not in bmapple2.cfg"
+fi
+
 echo "Monitors"
 # Every lit pixel of a green monitor is green (red and blue the same, and
 # less than green); amber is red, then green, no blue; white is grey.
@@ -529,7 +604,7 @@ PYEOF
             '800 type 20 B$="":FOR J=1 TO 2000:IF PEEK(49208)/2<>INT(PEEK(49208)/2) THEN B$=B$+CHR$(PEEK(49210))\n' \
             '1700 type 30 NEXT:A$=B$:GOSUB 100:END\n' \
             '2100 type 100 FOR I=1 TO LEN(A$):POKE 49210,ASC(MID$(A$,I,1)):NEXT:POKE 49210,13:RETURN\n' \
-            '2900 type RUN\n' '4400 audio' '4401 quit'
+            '2900 type RUN\n' '4400 audio' '4401 webui reboot' '4500 quit'
     }
     mkdir -p "$OUT/modem/roms" "$OUT/modem_nc/roms"
     for f in "$BMAPPLE2_ROMS"/*; do
@@ -557,6 +632,9 @@ while b'WELCOME' not in got:
     got += d
 log.write('got back %r\n' % got)
 log.flush()
+# The call stays up until the Pi reboots (the test kills this then).
+import time
+time.sleep(120)
 EOF
     server=$!
     sleep 1
@@ -570,6 +648,7 @@ EOF
     else
         fail modem "the Apple didn't get CONNECT and WELCOME (see out/modem/server.log)"
     fi
+    check_log modem "reboot requested .*, 0 connection\(s\) open" "a reboot closes the call first"
     (cd "$OUT/modem_nc" && modem_basic 65515 | BMAPPLE2_SIM_CONNECT_FRAMES=120 \
         BMAPPLE2_IP=127.0.0.1 BMAPPLE2_CMDLINE="root=." "$SIM" > log.txt 2>&1)
     check_log modem_nc "can't connect to 127.0.0.1:65515" "a call nobody answers fails"

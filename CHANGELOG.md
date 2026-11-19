@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.4.6 – unreleased
+
+- Fixed: Reboot and Shut Down left a call made with the virtual modem
+  open at the BBS's end. The connections are now closed, and the far end
+  told, before the Pi restarts or halts (as BMCoco 0.5.7 does)
+- Fixed: changing a Wi-Fi setting in the menu (the network, password or
+  country) spoiled a Wi-Fi key of 64 hex digits in `wpa_supplicant.conf`
+  (as `wpa_passphrase` writes it): it was cut to 63 and put in quotes, so
+  Wi-Fi stopped working. A password with a `"` in it was cut short too.
+  Both are now written back as they were
+- Fixed: Esc in the menu's Machine list closed the whole menu; it now goes
+  back to it
+- Time Zone in the Network menu has the zones a half or three quarters of
+  an hour off (UTC+5:30, UTC+5:45, UTC-3:30, ...), and shows one set in
+  `cmdline.txt` as it is; before, it had whole hours only
+- The menu's file browser, unused since KEGS has its own, is gone
+- Tests: a reboot closes the modem's call; the Wi-Fi key and a password
+  with a `"` kept; Esc in the Machine list; a half-hour time zone
 ## 0.4.5 – 2026-11-19
 
 - USB sticks, from BMA800XL: up to three FAT sticks, as USB:, USB2: and
