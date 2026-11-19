@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.6 – unreleased
+## 0.4.6 – 2026-11-19
 
 - Fixed: Reboot and Shut Down left a call made with the virtual modem
   open at the BBS's end. The connections are now closed, and the far end
