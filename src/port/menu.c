@@ -1,4 +1,22 @@
 /*
+ * BMA800XL - A bare metal Atari 800XL emulator for Raspberry Pi
+ * Copyright (C) 2026 aminch <https://github.com/aminch>
+ *
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ *
+ * Modified for BMApple2.
+ *
  * menu.c - the BMApple2 menu.
  *
  * F10, a gamepad's Home button or Select+Start open it. BMApple2's own
@@ -8,9 +26,6 @@
  * in bmapple2.cfg and used again at the next boot.
  *
  * From BMCoco's menu.c.
- *
- * This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
- * the Raspberry Pi. See LICENSE for licensing details.
  */
 
 #include "defc.h"

@@ -1,6 +1,24 @@
 //
 // display.h
 //
+// BMA800XL - A bare metal Atari 800XL emulator for Raspberry Pi
+// Copyright (C) 2026 aminch <https://github.com/aminch>
+//
+// This program is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// This program is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
+//
+// Modified for BMApple2.
+//
 // The Pi 5's direct display driver's picture: two 32-bit pixel buffers,
 // shown in turn as one HVS plane, scaled to its place on the screen by the
 // BCM2712's HVS (hvs.h). BMApple2 draws a frame into the buffer not on
@@ -19,9 +37,6 @@
 //    tasks on the core that calls it (core 1 here); addon/linux/
 //    semaphore.cpp: Circle's VCHIQ waits yield, which is how the Pi 3 runs
 //    them while it waits for a frame.
-//
-// This file is part of BMApple2, a bare metal Apple II and IIgs emulator for
-// the Raspberry Pi. See LICENSE for licensing details.
 //
 
 #ifndef BMAPPLE2_KMS_PI5_DISPLAY_H_

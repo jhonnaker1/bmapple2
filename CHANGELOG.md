@@ -9,6 +9,10 @@
   THIRD_PARTY.md says which firmware release the SD card's is. Its USB
   paddles (Atari) are left out, and BMApple2 already ran the ARM at its
   full clock and drew RGB565 pictures on the GPU
+- Web UI uploads are about 5 times faster: 64 KB written to the card at a
+  time, and a larger TCP receive window (from BMA800XL)
+- The files from BMA800XL carry its licence notices (GPL 3, or BMC64's
+  Apache 2.0 with aminch's changes), followed by "Modified for BMApple2"
 
 ## 0.4.4 – 2026-11-11
 
