@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.5 – unreleased
+
+- Pi 5: the fan is run by the SoC's temperature (off below 50 °C, faster
+  in four steps up to 75 °C), as on Raspberry Pi OS; before it stayed off
+  (from BMA800XL 1.4.3, after BMC64)
+- From BMA800XL 1.4.3: the Pi 5's power button code is in src/pi45, and
+  THIRD_PARTY.md says which firmware release the SD card's is. Its USB
+  paddles (Atari) are left out, and BMApple2 already ran the ARM at its
+  full clock and drew RGB565 pictures on the GPU
+
 ## 0.4.4 – 2026-11-11
 
 - Fixed: Caps Lock didn't stay on: capitals needed Shift held, and games
