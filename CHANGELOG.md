@@ -21,6 +21,10 @@
   when the display was already in the wanted mode, or didn't list it
 - The web UI's file view sorts by name, size or date (click the column,
   again to reverse it), from BMA800XL
+- Fixed, from BMA800XL: the web UI could fail to load in Safari, which
+  opens spare connections early: one that sent nothing for 2 s was
+  closed, just as a request might arrive on it. Idle connections now stay
+  open until one sends a request (up to 8, for 30 s)
 
 ## 0.4.4 – 2026-11-11
 
