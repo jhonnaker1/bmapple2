@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.5 – unreleased
+## 0.4.5 – 2026-11-19
 
 - USB sticks, from BMA800XL: up to three FAT sticks, as USB:, USB2: and
   USB3:. KEGS's file browser (F4) shows each as a folder in the card's
@@ -30,6 +30,7 @@
   opens spare connections early: one that sent nothing for 2 s was
   closed, just as a request might arrive on it. Idle connections now stay
   open until one sends a request (up to 8, for 30 s)
+- Tests: USB sticks in the card's top folder, and pulling one out
 
 ## 0.4.4 – 2026-11-11
 
