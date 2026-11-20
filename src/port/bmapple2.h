@@ -112,4 +112,25 @@ void bmapple2_feed_silence(void);
 /* menu.c */
 void bmapple2_menu(void);
 
+/* fujinet.c: a FujiNet's devices (FujiNet-PC on another computer, which
+   connects in) as slot 7's first SmartPort units, when "fujinet" is on.
+   bmapple2_fujinet_poll(), every frame, takes FujiNet's connection and
+   finds its units; bmapple2_fujinet_units() is how many (0 when it isn't
+   connected). bmapple2_fujinet_request() sends a SmartPort call to unit
+   UNIT (1 to units): CMD, its parameter count PCOUNT, the 5 PARAMS after
+   the command list's pointer, and DATA written. It waits for the answer,
+   puts the data read in REPLY (up to MAX bytes, *REPLY_LEN of them), and
+   returns its status (a SmartPort error, 0 if none), or -1 if FujiNet has
+   gone or didn't answer. bmapple2_fujinet_wait() waits up to SECONDS for
+   FujiNet to connect (to boot from it); TRUE if it has. */
+int bmapple2_fujinet_enabled(void);
+int bmapple2_fujinet_port(void);
+void bmapple2_fujinet_poll(void);
+int bmapple2_fujinet_units(void);
+int bmapple2_fujinet_request(int cmd, int pcount, int unit, const uint8_t *params,
+                             const uint8_t *data, int data_len,
+                             uint8_t *reply, int max, int *reply_len);
+int bmapple2_fujinet_wait(double seconds);
+void bmapple2_fujinet_status(char *text, size_t size);
+
 #endif /* BMAPPLE2_PORT_H_ */

@@ -311,6 +311,61 @@ from BASIC, say; set *Serial Mask* to *Mask off high bit* for plain text).
 Incoming connections (the modem answering calls, and *Use incoming port
 6501*) aren't supported on the Pi.
 
+### FujiNet
+
+A [FujiNet](https://fujinet.online/) mounts Apple disk images from TNFS
+servers on the internet and from its own SD card, and gives Apple programs
+written for it a network device (HTTP, TCP and more), a clock, a printer
+and a modem. Its CONFIG program, which boots first, picks the disks.
+
+BMApple2 works with **FujiNet-PC**, FujiNet's program for a computer,
+built for the Apple II, running on a computer on the same network. It
+talks to BMApple2 as FujiNet Go's AppleWin does ("SmartPort over SLIP"):
+FujiNet-PC connects to BMApple2, on port 1985, and its devices appear on
+slot 7's SmartPort. A FujiNet device for the Apple II (one that plugs into
+the disk port) can't be used: it has no way to reach an emulator.
+
+1. Turn on networking, and *FujiNet* in the menu's *Network* page (or put
+   `fujinet=1` in `cmdline.txt`), then reboot. The *FujiNet* line in the
+   menu then says *Waiting on port 1985*.
+2. On the computer, build FujiNet-PC for the Apple II from
+   [fujinet-firmware](https://github.com/FujiNetWIFI/fujinet-firmware)
+   (`./build.sh -p APPLE`; see its `build-sh.md`). The program and its
+   files end up in `build/dist`.
+3. In `build/dist/fnconfig.ini`, under `[BOIP]`, set `host` to the Pi's
+   address (shown at the top of the *Network* page), and leave `port` empty
+   for 1985:
+   ```
+   [BOIP]
+   enabled=1
+   host=192.168.1.50
+   port=
+   ```
+4. Start it (`./run-fujinet` in `build/dist`). The menu's *FujiNet* line
+   says *Connected, 14 devices*.
+
+When FujiNet is on, slot 7 boots FujiNet's first disk, CONFIG, and waits
+up to 15 seconds for FujiNet to connect, which it does a few seconds after
+the Pi's network is up (`fujinet_wait` sets the wait). Without it, slot 7
+boots its own first disk as before. To start CONFIG again later, or if
+FujiNet connected only after the wait, use *Restart* in the menu.
+
+While FujiNet is connected, its devices are slot 7's SmartPort units 1 to
+14: its eight disks, then its CP/M, clock, network, FujiNet (the one CONFIG
+talks to), printer and modem. The disks loaded in slot 7 with **F4** come
+after them (units 15 to 30): ProDOS 8 sees FujiNet's first two disks as
+slot 7's drives, and GS/OS sees them all.
+
+The Apple waits for each answer from FujiNet; a FujiNet that stops
+answering is let go after 5 seconds, and its units disappear until it
+connects again.
+
+FujiNet-PC built from fujinet-firmware's code of November 2026 has a fault
+that stops CONFIG booting the disks it mounts ("FUJINET_DISK_0 NOT
+FOUND"): it gives its disks the wrong names (`FUJINET_DISK_48` and on).
+Until it is fixed there, change, in `lib/device/iwm/disk.cpp`,
+`std::to_string(disk_num)` to `std::string(1, disk_num)` before building.
+
 ## Options
 
 `cmdline.txt` is a single line of `name=value` options separated by spaces.
@@ -344,6 +399,9 @@ settings (F4) and `config.kegs` instead.
 | `webui`             | `0`, `1`                     | `1`      | Web UI when networking is on |
 | `webui_pin`         | digits                       | none     | PIN for the web UI |
 | `timezone`          | minutes east of UTC          | `0`      | Time zone for the network clock |
+| `fujinet`           | `0`, `1`                     | `0`      | Let a FujiNet-PC connect, and boot slot 7 from it (see FujiNet) |
+| `fujinet_port`      | port number                  | `1985`   | The port FujiNet-PC connects to |
+| `fujinet_wait`      | seconds                      | `15`     | How long booting slot 7 waits for FujiNet to connect |
 | `usbpowerdelay`     | milliseconds                 | Circle's | Circle: wait for USB devices to power up (by default 300 ms, 510 ms behind a hub) |
 
 A IIgs also has its own volume, in its Control Panel; a IIe has none, so

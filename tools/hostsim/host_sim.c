@@ -64,6 +64,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#include <netinet/in.h>
+#include <poll.h>
 
 #include <dirent.h>
 #include <fcntl.h>
@@ -844,6 +846,81 @@ void host_tcp_close_all(void)
 			break;
 		host_tcp_close(fd);
 	}
+}
+
+/* Listening: a non-blocking socket on the PC's own loopback address (no
+   firewall question on a Mac), accepted from in host_tcp_accept(). */
+static int sim_listen_fd = -1;
+
+int host_tcp_listen(int port)
+{
+	struct sockaddr_in addr;
+	int fd, one = 1;
+	if (sim_listen_fd >= 0)
+		return 1;
+	if (port <= 0 || port > 65535)
+		return 0;
+	fd = socket(AF_INET, SOCK_STREAM, 0);
+	if (fd < 0)
+		return 0;
+	setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one, sizeof(one));
+	memset(&addr, 0, sizeof(addr));
+	addr.sin_family = AF_INET;
+	addr.sin_port = htons((unsigned short) port);
+	addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+	if (bind(fd, (struct sockaddr *) &addr, sizeof(addr)) < 0 || listen(fd, 1) < 0) {
+		fprintf(stderr, "[sim] can't listen on port %d\n", port);
+		close(fd);
+		return 0;
+	}
+	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+	fprintf(stderr, "[sim] listening on port %d\n", port);
+	sim_listen_fd = fd;
+	return 1;
+}
+
+int host_tcp_accept(void)
+{
+	int fd;
+	struct pollfd p;
+	if (sim_listen_fd < 0 || frame < 100)   /* the network comes up first */
+		return -1;
+	/* The far end (FujiNet-PC) runs in real time, and the simulator's
+	   own clock runs ahead of it: give it 5 ms of real time each call. */
+	p.fd = sim_listen_fd;
+	p.events = POLLIN;
+	if (poll(&p, 1, live ? 0 : 5) <= 0)
+		return -1;
+	fd = accept(sim_listen_fd, NULL, NULL);
+	if (fd < 0)
+		return -1;
+	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK);
+#ifdef SO_NOSIGPIPE
+	{
+		int one = 1;
+		setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
+	}
+#endif
+	sim_tcp_opened(fd);
+	return fd;
+}
+
+/* In real time, even when the simulator's own runs ahead: the far end
+   (FujiNet-PC) does. */
+int host_tcp_wait(int connection, unsigned ms)
+{
+	struct pollfd p;
+	int r;
+	char byte;
+	p.fd = connection;
+	p.events = POLLIN;
+	r = poll(&p, 1, (int) ms);
+	if (r < 0)
+		return errno == EINTR ? 0 : -1;
+	if (r == 0)
+		return 0;
+	r = (int) recv(connection, &byte, 1, MSG_PEEK | MSG_DONTWAIT);
+	return r > 0 ? 1 : -1;
 }
 
 int host_run_in_background(void (*fn)(void *arg), void *arg)

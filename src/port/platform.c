@@ -617,6 +617,7 @@ void bmapple2_idle(void)
 {
 	double now = host_time();
 	bmapple2_feed_silence();
+	bmapple2_fujinet_poll();
 	if (now - last_sync_time >= 1.0) {
 		last_sync_time = now;
 		sync_files();

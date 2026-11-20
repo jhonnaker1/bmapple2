@@ -16,6 +16,7 @@ BMApple2 is in `src/port/`:
 | `src/port/joystick.c` | In place of `joystick_driver.c`: `joystick_init()`, `joystick_update()`, `joystick_update_buttons()` |
 | `src/port/scc_stub.c` | In place of `scc_unixdriver.c` on the Pi |
 | `src/port/scc_socket_driver.c` | KEGS's `scc_socket_driver.c` (the virtual modem), changed: Circle's sockets, dialling in the background. When KEGS is updated, take its new version and make the changes (marked `BMAPPLE2`) again |
+| `src/port/smartport.c` | KEGS's `smartport.c` (slot 7's SmartPort), changed: a FujiNet's units come first (`src/port/fujinet.c`). When KEGS is updated, take its new version and make the changes (marked `BMAPPLE2`) again |
 | `src/port/keymap.c` | USB keys to the ADB codes KEGS takes |
 | `src/port/osd.c` | Draws the menu with KEGS's font (`g_font_array`) |
 | `src/port/compat/` | Empty `sys/ioctl.h`, `sys/ipc.h`, `sys/shm.h` for newlib |

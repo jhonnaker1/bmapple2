@@ -176,6 +176,16 @@ void host_tcp_close(int connection);
    that a server (the modem's BBS) isn't left holding a connection nobody
    will use. */
 void host_tcp_close_all(void);
+/* Listens for connections on PORT, in the background, once the network is
+   up (one port only). host_tcp_accept() returns the next connection made
+   to it, as host_tcp_connect() does, or -1 if there is none yet. Returns 0
+   if it can't listen. */
+int host_tcp_listen(int port);
+int host_tcp_accept(void);
+/* Waits up to MS milliseconds for bytes to read on CONNECTION, letting the
+   network run meanwhile: returns 1 when there are some, 0 if none came in
+   time, -1 if the connection is closed or broken. */
+int host_tcp_wait(int connection, unsigned ms);
 /* A Wi-Fi network found by host_wifi_scan(). signal is in dBm. */
 struct host_wifi_ap {
 	char ssid[33];

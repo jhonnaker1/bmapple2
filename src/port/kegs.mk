@@ -12,6 +12,8 @@
 #    connections), replaced by BMApple2's changed copy of it,
 #    src/port/scc_socket_driver.c (Circle's sockets, dialling in the
 #    background);
+#  - smartport.c (slot 7's SmartPort), replaced by BMApple2's changed copy
+#    of it, src/port/smartport.c (a FujiNet's devices, src/port/fujinet.c);
 #  - the front ends (xdriver.c, windriver.c, the Mac's Swift files) and the
 #    sound drivers they use (pulseaudio_driver.c, macsnd_driver.c,
 #    win32snd_driver.c): src/port/platform.c is BMApple2's.
@@ -42,7 +44,6 @@ KEGS_SRCS = \
 	scc.c \
 	scc_windriver.c \
 	sim65816.c \
-	smartport.c \
 	sound.c \
 	undeflate.c \
 	unshk.c \

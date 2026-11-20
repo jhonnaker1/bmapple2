@@ -36,6 +36,7 @@
 #include <circle/net/socket.h>
 #include <circle/net/tcpconnection.h>
 #include <circle/netdevice.h>
+#include <circle/sched/scheduler.h>
 #include <circle/sched/task.h>
 #include <circle/string.h>
 #include <fatfs/ff.h>
@@ -516,6 +517,99 @@ extern "C" void host_tcp_close(int connection) {
     CSocket *socket = c->socket;
     c->socket = 0;
     delete socket;
+  }
+}
+
+// Listening (host_tcp_listen, for FujiNet-PC, which connects in): a
+// background task waits in Accept() and leaves the connection it gets in
+// s_accepted, which host_tcp_accept() moves into a slot. One port only.
+
+namespace {
+
+CSocket *volatile s_accepted = 0;
+bool s_listening = false;
+
+void ListenTask(void *arg) {
+  u16 port = (u16)(uintptr_t)arg;
+  while (s_net == 0 || !s_net->IsRunning()) {
+    CScheduler::Get()->MsSleep(100);
+  }
+  CSocket listener(s_net, IPPROTO_TCP);
+  if (listener.Bind(port) < 0 || listener.Listen(1) < 0) {
+    CLogger::Get()->Write(FromNetwork, LogError, "Cannot listen on port %u",
+                          (unsigned)port);
+    return;
+  }
+  CLogger::Get()->Write(FromNetwork, LogNotice, "Listening on port %u",
+                        (unsigned)port);
+  for (;;) {
+    CIPAddress ip;
+    u16 client_port;
+    CSocket *connection = listener.Accept(&ip, &client_port);
+    if (connection == 0) {
+      CScheduler::Get()->MsSleep(100);
+      continue;
+    }
+    // One waits at a time: a newer one replaces one not yet taken.
+    CSocket *old = s_accepted;
+    s_accepted = connection;
+    delete old;
+  }
+}
+
+}  // namespace
+
+extern "C" int host_tcp_listen(int port) {
+  if (port <= 0 || port > 65535 || s_net == 0) {
+    return 0;
+  }
+  if (s_listening) {
+    return 1;
+  }
+  s_listening = host_run_in_background(ListenTask, (void *)(uintptr_t)port);
+  return s_listening;
+}
+
+extern "C" int host_tcp_accept(void) {
+  CSocket *socket = s_accepted;
+  if (socket == 0) {
+    return -1;
+  }
+  for (int i = 0; i < kMaxTcpConnections; i++) {
+    if (s_tcp[i].socket == 0) {
+      s_accepted = 0;
+      s_tcp[i].socket = socket;
+      s_tcp[i].pos = s_tcp[i].length = 0;
+      s_tcp[i].connecting = false;
+      return i;
+    }
+  }
+  return -1;  // all taken: it waits
+}
+
+extern "C" int host_tcp_wait(int connection, unsigned ms) {
+  TcpConnection *c = TcpSlot(connection);
+  double end = host_time() + ms / 1000.0;
+  for (;;) {
+    if (c == 0 || c->socket == 0) {
+      return -1;
+    }
+    if (c->pos < c->length) {
+      return 1;
+    }
+    int got = c->socket->Receive(c->buffer, sizeof c->buffer, MSG_DONTWAIT);
+    if (got < 0) {
+      return -1;
+    }
+    if (got > 0) {
+      c->pos = 0;
+      c->length = (unsigned)got;
+      return 1;
+    }
+    if (host_time() >= end) {
+      return 0;
+    }
+    host_sleep_us(500);  // Circle's tasks (the network's) run meanwhile
   }
 }
 

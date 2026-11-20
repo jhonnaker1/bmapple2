@@ -17,7 +17,7 @@ OBJS := $(addprefix $(OUT)/kegs/,$(KEGS_SRCS:.c=.o) $(KEGS_HOST_SRCS:.c=.o)) \
         $(OUT)/port/platform.o $(OUT)/port/keymap.o $(OUT)/port/joystick.o \
         $(OUT)/port/snddrv.o $(OUT)/port/menu.o $(OUT)/port/osd.o \
         $(OUT)/port/scc_socket_driver.o $(OUT)/port/usbsticks.o \
-        $(OUT)/port/fswrap.o \
+        $(OUT)/port/fswrap.o $(OUT)/port/smartport.o $(OUT)/port/fujinet.o \
         $(OUT)/host_sim.o $(OUT)/live.o
 
 all: $(OUT)/bmapple2_sim
@@ -35,6 +35,10 @@ $(OUT)/kegs/%.o: $(KEGS)/%.c
 
 # KEGS's code, changed: KEGS's warnings are its own.
 $(OUT)/port/scc_socket_driver.o: $(ROOT)/src/port/scc_socket_driver.c $(ROOT)/src/host.h
+	@mkdir -p $(dir $@)
+	@$(CC) $(CFLAGS) -w -c -o $@ $<
+
+$(OUT)/port/smartport.o: $(ROOT)/src/port/smartport.c $(ROOT)/src/port/bmapple2.h $(ROOT)/src/host.h
 	@mkdir -p $(dir $@)
 	@$(CC) $(CFLAGS) -w -c -o $@ $<
 

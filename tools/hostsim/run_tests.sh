@@ -523,6 +523,83 @@ echo "Machine choice"
 run machine 60 "$TESTROMS" "machine=iigs3" '100 quit\n'
 check_log machine "Apple IIe, ROM .*roms/ROM" "a machine without a ROM falls back to one with"
 
+echo "FujiNet (a stand-in, fake_fujinet.py)"
+# The stand-in ROM boots slot 7 (make_test_rom.py boot7), and KEGS's s7d1
+# holds local.po, whose boot block fills the screen with blocks. With
+# FujiNet on, the stand-in FujiNet connects and slot 7 boots its first
+# disk, whose boot block makes SmartPort calls and writes their results
+# back to FujiNet (see fake_fujinet.py): a block read from its unit 2,
+# the unit count (16 of KEGS's and FujiNet's 3), KEGS's s7d1 read as unit
+# 4, and a control call.
+FUJIPORT=19850
+mkdir -p "$OUT/bootroms"
+python3 "$HERE/make_test_rom.py" "$OUT/bootroms" boot7 > /dev/null
+fuji_setup() {
+    mkdir -p "$OUT/$1"
+    python3 "$HERE/fake_fujinet.py" images "$OUT/$1" > "$OUT/$1/pattern5.hex"
+    printf 's7d1 = local.po\n' > "$OUT/$1/config.kegs"
+}
+# local_screen NAME: TRUE if the screen is mostly blocks (local.po booted)
+local_screen() {
+    python3 - "$OUT/$1/a.ppm" <<'EOF'
+import sys
+data = open(sys.argv[1], 'rb').read().split(b'\n', 3)
+px = data[3]
+lit = sum(1 for i in range(0, len(px), 3) if px[i] > 128)
+sys.exit(0 if lit > len(px) // 3 // 3 else 1)
+EOF
+}
+fuji_setup fujinet
+python3 "$HERE/fake_fujinet.py" serve $FUJIPORT "$OUT/fujinet" &
+FUJIPID=$!
+run fujinet 60 "$OUT/bootroms" "fujinet=1 fujinet_port=$FUJIPORT" '300 shot a.ppm\n301 quit\n'
+wait $FUJIPID
+check_log fujinet "FujiNet: connected, 3 devices" "FujiNet's units found"
+if python3 - "$OUT/fujinet" <<'EOF'
+import sys
+d = sys.argv[1]
+def block(u, b):
+    return open('%s/written_%d_%d.bin' % (d, u, b), 'rb').read()
+want = bytes.fromhex(open(d + '/pattern5.hex').read().strip())
+assert block(2, 6) == want, 'block 5 not read back'
+status = block(2, 7)
+assert status[0] == 19, 'unit count %d, not 19' % status[0]
+assert status[8] == 8 and status[9] == 0, 'X %d, error %d' % (status[8], status[9])
+assert block(2, 8) == open(d + '/local.po', 'rb').read()[:512], "s7d1 not unit 4"
+assert 'cmd 4 pcount 3 unit 3 params aa' in open(d + '/requests.txt').read()
+assert 'data 0300414243' in open(d + '/requests.txt').read()
+EOF
+then
+    pass "fujinet: booted FujiNet's disk; reads, writes, status, control reach it"
+else
+    fail fujinet "see out/fujinet/requests.txt"
+fi
+# FujiNet off: slot 7 is KEGS's alone, and boots local.po.
+fuji_setup fujinet_off
+run fujinet_off 60 "$OUT/bootroms" "" '300 shot a.ppm\n301 quit\n'
+if local_screen fujinet_off; then
+    pass "fujinet_off: slot 7 boots KEGS's s7d1"
+else
+    fail fujinet_off "local.po didn't boot (see out/fujinet_off/a.ppm)"
+fi
+# FujiNet on but not there: after fujinet_wait seconds, KEGS's s7d1.
+fuji_setup fujinet_none
+run fujinet_none 60 "$OUT/bootroms" "fujinet=1 fujinet_port=$FUJIPORT fujinet_wait=2" '400 shot a.ppm\n401 quit\n'
+if local_screen fujinet_none; then
+    pass "fujinet_none: no FujiNet, so slot 7 boots KEGS's s7d1 after the wait"
+else
+    fail fujinet_none "local.po didn't boot (see out/fujinet_none/a.ppm)"
+fi
+# FujiNet goes away at the boot block's read: the read fails (no wait for
+# ever), and FujiNet's units are gone.
+fuji_setup fujinet_gone
+python3 "$HERE/fake_fujinet.py" serve $FUJIPORT "$OUT/fujinet_gone" vanish &
+FUJIPID=$!
+run fujinet_gone 60 "$OUT/bootroms" "fujinet=1 fujinet_port=$FUJIPORT" '300 shot a.ppm\n301 quit\n'
+wait $FUJIPID
+check_log fujinet_gone "FujiNet: FujiNet closed the connection; disconnected" "a FujiNet that goes away is let go"
+check_log fujinet_gone "quit at frame 301" "and the Apple goes on"
+
 if [ -n "${BMAPPLE2_ROMS:-}" ]; then
     echo "Apple IIgs (real ROM from $BMAPPLE2_ROMS)"
     run iigs 60 "$BMAPPLE2_ROMS" "" '300 shot boot.ppm\n310 type PRINT "HELLO"\\n\n500 shot hello.ppm\n600 audio\n601 quit\n'

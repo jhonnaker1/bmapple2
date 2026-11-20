@@ -17,7 +17,10 @@
 # Frames are counted at the start of each vertical blank ($C019), so a
 # screenshot taken a frame later always differs at the top.
 #
-#   python3 make_test_rom.py DIR
+# With "boot7", it boots slot 7 instead (JMP $C700, once the screen is
+# cleared), as the IIe's ROM does when it finds a disk there.
+#
+#   python3 make_test_rom.py DIR [boot7]
 #
 
 import sys
@@ -121,6 +124,8 @@ def program():
     a.branch(0xd0, 'clear')           # BNE
     lda_imm(0)
     sta_zp(0x00)
+    if BOOT7:
+        a.op(0x4c, 0xc700, 2)         # JMP $C700
 
     a.label('loop')
     # The start of the next vertical blank (on a IIe, $C019's top bit is
@@ -216,6 +221,7 @@ def rom():
 
 
 out = sys.argv[1] if len(sys.argv) > 1 else '.'
+BOOT7 = len(sys.argv) > 2 and sys.argv[2] == 'boot7'
 with open(out + '/ROM', 'wb') as f:
     f.write(rom())
 print('wrote ' + out + '/ROM')

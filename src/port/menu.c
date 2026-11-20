@@ -437,12 +437,13 @@ static int scan_wifi(void)
 
 static void network_menu(void)
 {
-	enum { N_DEVICE, N_SCAN, N_SSID, N_PASSWORD, N_COUNTRY, N_WEBUI, N_PIN, N_TIMEZONE, N_REBOOT };
+	enum { N_DEVICE, N_SCAN, N_SSID, N_PASSWORD, N_COUNTRY, N_WEBUI, N_PIN, N_TIMEZONE, N_FUJINET,
+	       N_REBOOT };
 	static const char *const devices[] = {"off", "ethernet", "wifi", NULL};
 	static const char *const device_names[] = {"Off", "Ethernet", "Wi-Fi", NULL};
 	int sel = 2;
 	for (;;) {
-		char status[64], tz[16];
+		char status[64], tz[16], fujinet[40];
 		const char *net = host_option("network", "off");
 		const char *pin = host_option("webui_pin", "");
 		int device = strcmp(net, "ethernet") == 0 ? 1 : strcmp(net, "wifi") == 0 ? 2 : 0;
@@ -452,6 +453,10 @@ static void network_menu(void)
 		read_wifi_config();
 		host_network_status(status, sizeof(status));
 		time_zone_name(tz, sizeof(tz), minutes);
+		if (setting_on("fujinet", FALSE) == bmapple2_fujinet_enabled())
+			bmapple2_fujinet_status(fujinet, sizeof(fujinet));
+		else
+			snprintf(fujinet, sizeof(fujinet), "%s", setting_on("fujinet", FALSE) ? "On" : "Off");
 		{
 			struct osd_item items[] = {
 				{status, NULL, OSD_ITEM_LABEL, -1},
@@ -464,6 +469,7 @@ static void network_menu(void)
 				{"Web UI", NULL, check(setting_on("webui", TRUE)), N_WEBUI},
 				{"Web UI PIN", pin[0] ? pin : "(none)", OSD_ITEM_SUBMENU, N_PIN},
 				{"Time Zone", tz, OSD_ITEM_SUBMENU, N_TIMEZONE},
+				{"FujiNet", fujinet, OSD_ITEM_SUBMENU, N_FUJINET},
 				{"", NULL, OSD_ITEM_LABEL, -1},
 				{"Changes apply after a reboot.", NULL, OSD_ITEM_LABEL, -1},
 				{"Reboot Now", NULL, 0, N_REBOOT},
@@ -525,6 +531,16 @@ static void network_menu(void)
 			z = osd_choose("Time Zone", zones, current);
 			if (z >= 0 && time_zones[z] != minutes) {
 				save_setting_int("timezone", time_zones[z]);
+				reboot_needed = TRUE;
+			}
+			break;
+		}
+		case N_FUJINET: {
+			static const char *const off_on[] = {"Off", "On", NULL};
+			int on = setting_on("fujinet", FALSE);
+			i = osd_choose("FujiNet", off_on, on);
+			if (i >= 0 && i != on) {
+				save_setting("fujinet", i ? "1" : "0");
 				reboot_needed = TRUE;
 			}
 			break;

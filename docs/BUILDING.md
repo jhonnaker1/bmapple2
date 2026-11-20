@@ -172,6 +172,8 @@ with `tools/gen_webui_assets.py` whenever an asset changes.
 | `src/port/menu.c`, `osd.c`   | The menu and its on-screen display          |
 | `src/port/scc_stub.c`        | KEGS's host serial port driver, for a Pi with none |
 | `src/port/scc_socket_driver.c` | KEGS's virtual modem, changed for Circle's sockets and dialling in the background (marked `BMAPPLE2`) |
+| `src/port/smartport.c`       | KEGS's slot 7 SmartPort, with a FujiNet's devices added (marked `BMAPPLE2`) |
+| `src/port/fujinet.c`         | A FujiNet-PC's devices over the network ("SmartPort over SLIP") |
 | `src/port/fswrap.c`          | `stat()` of the SD card's root, which FatFs can't do (`--wrap=stat`) |
 | `src/port/posix_extra.c`     | waitpid() for newlib                        |
 | `src/port/compat/`           | Empty stand-ins for headers newlib lacks    |

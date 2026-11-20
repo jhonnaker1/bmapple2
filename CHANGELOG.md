@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.4.7 – unreleased
+
+- FujiNet: a FujiNet-PC on another computer, built for the Apple II, can
+  connect to BMApple2 (*FujiNet* in the Network menu, or `fujinet=1`), as
+  it does to FujiNet Go's AppleWin ("SmartPort over SLIP", port 1985). Its
+  devices (its disks, network, clock, printer, modem, and the FujiNet that
+  its CONFIG program talks to) become slot 7's first SmartPort units, and
+  slot 7 boots its CONFIG; the disks loaded in slot 7 follow them. The
+  User Guide says how. Tried with FujiNet-PC on a Mac: a IIgs boots
+  CONFIG, which lists fujinet.online's folders, mounts a disk from it and
+  boots it, and the program on it (an ISS tracker) fetches the station's
+  position through FujiNet's network device
+- Tests: a stand-in FujiNet: booting from it, block reads and writes,
+  status, control calls, the disks in slot 7 after its units, booting the
+  slot's own disk when FujiNet is off or doesn't come, and a FujiNet that
+  goes away
+
 ## 0.4.6 – 2026-11-19
 
 - Fixed: Reboot and Shut Down left a call made with the virtual modem
