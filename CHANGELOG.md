@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.7 – unreleased
+## 0.4.7 – 2026-11-20
 
 - FujiNet: a FujiNet-PC on another computer, built for the Apple II, can
   connect to BMApple2 (*FujiNet* in the Network menu, or `fujinet=1`), as
