@@ -360,11 +360,10 @@ The Apple waits for each answer from FujiNet; a FujiNet that stops
 answering is let go after 5 seconds, and its units disappear until it
 connects again.
 
-FujiNet-PC built from fujinet-firmware's code of November 2026 has a fault
-that stops CONFIG booting the disks it mounts ("FUJINET_DISK_0 NOT
-FOUND"): it gives its disks the wrong names (`FUJINET_DISK_48` and on).
-Until it is fixed there, change, in `lib/device/iwm/disk.cpp`,
-`std::to_string(disk_num)` to `std::string(1, disk_num)` before building.
+Build FujiNet-PC from fujinet-firmware's code of 20 November 2026 or
+later. Before that it gave its disks the wrong names (`FUJINET_DISK_48`
+and on), and older FujiNet programs that find their disk by its name,
+such as `iss.po` on fujinet.online, stop with "FUJINET_DISK_0 NOT FOUND".
 
 ## Options
 
